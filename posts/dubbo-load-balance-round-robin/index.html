@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222"><meta name="generator" content="Hexo 6.3.0">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha256-HtsXJanqjKTc8vVQjO4YMhiqFoXkfBsjBWcX91T1jr8=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"nisiyong.github.io","root":"/","images":"/images","scheme":"Gemini","darkmode":false,"version":"8.15.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12},"copycode":{"enable":false,"style":null},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"prism":false,"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.xml","localsearch":{"enable":true,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false}}</script><script src="/js/config.js"></script>
+
+    <meta name="description" content="最近有个需求，需要对mq集群调用时做个权重分配，之前客户端对mq发送时都是普通轮询的策略，由于近期扩容，集群中部分服务器的性能不太一致，需要在mq发送时的策略做成带权重的轮询，让性能好的服务器处理更多的请求，也保护性能相对较差的服务器不被大流量压垮。实现此功能时参考了dubbo框架中的负载均衡轮询算法，在此做下笔记。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Dubbo负载均衡之加权轮训">
+<meta property="og:url" content="https://nisiyong.github.io/posts/dubbo-load-balance-round-robin/index.html">
+<meta property="og:site_name" content="Stephen Ni&#39;s Blog">
+<meta property="og:description" content="最近有个需求，需要对mq集群调用时做个权重分配，之前客户端对mq发送时都是普通轮询的策略，由于近期扩容，集群中部分服务器的性能不太一致，需要在mq发送时的策略做成带权重的轮询，让性能好的服务器处理更多的请求，也保护性能相对较差的服务器不被大流量压垮。实现此功能时参考了dubbo框架中的负载均衡轮询算法，在此做下笔记。">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://nisiyong.github.io/images/dubbo-load-balance-round-robin/006tNbRwly1fw96wkok1yj30b50bmjrh.jpg">
+<meta property="og:image" content="https://nisiyong.github.io/images/dubbo-load-balance-round-robin/006tNbRwly1fw95hs8w5rj305k08wa9w.jpg">
+<meta property="og:image" content="https://nisiyong.github.io/images/dubbo-load-balance-round-robin/006tNbRwly1fw96wop4i4j30ac0atmx6.jpg">
+<meta property="article:published_time" content="2018-10-15T20:37:25.000Z">
+<meta property="article:modified_time" content="2026-02-21T14:49:09.134Z">
+<meta property="article:author" content="Stephen Ni">
+<meta property="article:tag" content="dubbo">
+<meta property="article:tag" content="loadbalance">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://nisiyong.github.io/images/dubbo-load-balance-round-robin/006tNbRwly1fw96wkok1yj30b50bmjrh.jpg">
+
+
+<link rel="canonical" href="https://nisiyong.github.io/posts/dubbo-load-balance-round-robin/">
+
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://nisiyong.github.io/posts/dubbo-load-balance-round-robin/","path":"posts/dubbo-load-balance-round-robin/","title":"Dubbo负载均衡之加权轮训"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>Dubbo负载均衡之加权轮训 | Stephen Ni's Blog</title>
+  
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-HZ9W81HNR8"></script>
+  <script class="next-config" data-name="google_analytics" type="application/json">{"tracking_id":"G-HZ9W81HNR8","only_pageview":false}</script>
+  <script src="/js/third-party/analytics/google-analytics.js"></script>
+
+
+
+
+
+
+
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+<link rel="alternate" href="/atom.xml" title="Stephen Ni's Blog" type="application/atom+xml">
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Stephen Ni's Blog</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>关于</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup"><div class="search-header">
+  <span class="search-icon">
+    <i class="fa fa-search"></i>
+  </span>
+  <div class="search-input-container">
+    <input autocomplete="off" autocapitalize="off" maxlength="80"
+           placeholder="搜索..." spellcheck="false"
+           type="search" class="search-input">
+  </div>
+  <span class="popup-btn-close" role="button">
+    <i class="fa fa-times-circle"></i>
+  </span>
+</div>
+<div class="search-result-container no-result">
+  <div class="search-result-icon">
+    <i class="fa fa-spinner fa-pulse fa-5x"></i>
+  </div>
+</div>
+
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E9%97%AE%E9%A2%98"><span class="nav-number">1.</span> <span class="nav-text">问题</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E8%A7%A3%E5%86%B3"><span class="nav-number">2.</span> <span class="nav-text">解决</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%97%A0%E6%9D%83%E9%87%8D%E8%BD%AE%E8%AF%A2"><span class="nav-number">2.1.</span> <span class="nav-text">无权重轮询</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%B8%A6%E6%9D%83%E9%87%8D%E8%BD%AE%E8%AF%A2"><span class="nav-number">2.2.</span> <span class="nav-text">带权重轮询</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%B8%A6%E6%9D%83%E9%87%8D%E8%BD%AE%E8%AF%A2%EF%BC%88%E4%BC%98%E5%8C%96%E7%89%88%EF%BC%89"><span class="nav-number">2.3.</span> <span class="nav-text">带权重轮询（优化版）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%80%A7%E8%83%BD%E6%B5%8B%E8%AF%95"><span class="nav-number">2.4.</span> <span class="nav-text">性能测试</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%80%BB%E7%BB%93"><span class="nav-number">3.</span> <span class="nav-text">总结</span></a></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Stephen Ni"
+      src="/uploads/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Stephen Ni</p>
+  <div class="site-description" itemprop="description">成长是克服天性的过程</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">13</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">2</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">16</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/nisiyong" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;nisiyong" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://twitter.com/nisiyong" title="Twitter → https:&#x2F;&#x2F;twitter.com&#x2F;nisiyong" rel="noopener me" target="_blank"><i class="fab fa-twitter fa-fw"></i>Twitter</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="/atom.xml" title="RSS → atom.xml" rel="noopener me"><i class="fa fa-rss fa-fw"></i>RSS</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://weibo.com/nisiyong" title="Weibo → https:&#x2F;&#x2F;weibo.com&#x2F;nisiyong" rel="noopener me" target="_blank"><i class="fab fa-weibo fa-fw"></i>Weibo</a>
+      </span>
+  </div>
+  <div class="cc-license animated" itemprop="license">
+    <a href="https://creativecommons.org/licenses/by-nc-nd/4.0/" class="cc-opacity" rel="noopener" target="_blank"><img src="https://cdnjs.cloudflare.com/ajax/libs/creativecommons-vocabulary/2020.11.3/assets/license_badges/small/by_nc_nd.svg" alt="Creative Commons"></a>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://nisiyong.github.io/posts/dubbo-load-balance-round-robin/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/uploads/avatar.jpg">
+      <meta itemprop="name" content="Stephen Ni">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Stephen Ni's Blog">
+      <meta itemprop="description" content="成长是克服天性的过程">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="Dubbo负载均衡之加权轮训 | Stephen Ni's Blog">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Dubbo负载均衡之加权轮训
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2018-10-15 20:37:25" itemprop="dateCreated datePublished" datetime="2018-10-15T20:37:25+00:00">2018-10-15</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E6%8A%80%E6%9C%AF%E6%BC%AB%E8%B0%88/" itemprop="url" rel="index"><span itemprop="name">技术漫谈</span></a>
+        </span>
+    </span>
+
+  
+  
+  <span class="post-meta-item">
+    
+      <span class="post-meta-item-icon">
+        <i class="far fa-comment"></i>
+      </span>
+      <span class="post-meta-item-text">Disqus：</span>
+    
+    <a title="disqus" href="/posts/dubbo-load-balance-round-robin/#disqus_thread" itemprop="discussionUrl">
+      <span class="post-comments-count disqus-comment-count" data-disqus-identifier="posts/dubbo-load-balance-round-robin/" itemprop="commentCount"></span>
+    </a>
+  </span>
+  
+  
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+        <p>最近有个需求，需要对mq集群调用时做个权重分配，之前客户端对mq发送时都是普通轮询的策略，由于近期扩容，集群中部分服务器的性能不太一致，需要在mq发送时的策略做成带权重的轮询，让性能好的服务器处理更多的请求，也保护性能相对较差的服务器不被大流量压垮。实现此功能时参考了dubbo框架中的负载均衡轮询算法，在此做下笔记。</p>
+<span id="more"></span>
+
+<h2 id="问题"><a href="#问题" class="headerlink" title="问题"></a>问题</h2><p>在dubbo中，负载均衡的粒度可以细到方法级别。如图，在服务器A，服务器B和服务器C都提供hello()方法，消费者调用方法时需要选择其中一台服务器进行调用，当消费者对hello()进行大量调用时，如何将请求合理地分配到各服务器中，就是我们本文要探讨的问题。</p>
+<p><img src="/images/dubbo-load-balance-round-robin/006tNbRwly1fw96wkok1yj30b50bmjrh.jpg" alt="006tNbRwly1fw96wkok1yj30b50bmjrh"></p>
+<h2 id="解决"><a href="#解决" class="headerlink" title="解决"></a>解决</h2><p>解决方法有很多，在dubbo中默认提供了四种负载均衡策略（随机、轮询、最少活跃调用数、一致性Hash），这里我们只讨论<code>轮询</code>策略。</p>
+<h3 id="无权重轮询"><a href="#无权重轮询" class="headerlink" title="无权重轮询"></a>无权重轮询</h3><p>无权重的轮询非常简单，如上面的例子，只需依次循环调用各服务器就行。调用顺序如下：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">[A, B, C, A, B, C, ...]</span><br></pre></td></tr></table></figure>
+
+<h3 id="带权重轮询"><a href="#带权重轮询" class="headerlink" title="带权重轮询"></a>带权重轮询</h3><p>一般来说，无权重轮询也够用了，但是如果A、B、C者三台服务器的性能不一样（假设A&gt;B&gt;C），我们希望更多的请求落在A服务器上，这时候该如何做呢？</p>
+<p>我们假设权重比为A:B:C&#x3D;6:3:1，有10个调用请求，那么比较直接想到的调用顺序如下：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">[A, A, A, A, A, A, B, B, B, C]</span><br></pre></td></tr></table></figure>
+
+<p>请求按上面的顺序循环，的确是满足了按一定比例的分配，但是这样分配不太好，在一小段时间内，单台服务器连续处理多个请求会导致负载偏高，我们期望请求即要按权重分配，也要均匀地调用。</p>
+<p>我们用以下表格来表示，表格的高度表示权重，对应列分别表示服务器A、B、C。均匀的调用，即从左向右，从上到下遍历表格，得到调用顺序为如下：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">[A, B, C, A, B, A, B, A, A, A]</span><br></pre></td></tr></table></figure>
+
+<p><img src="/images/dubbo-load-balance-round-robin/006tNbRwly1fw95hs8w5rj305k08wa9w.jpg" alt="006tNbRwly1fw95hs8w5rj305k08wa9w"></p>
+<p>到目前dubbo最新的版本2.6.4为止，RoundRobinLoadBalance采用的算法如下：</p>
+<ul>
+<li>用sequences来记录每个method的调用次数</li>
+<li>计算出最大权重值maxWeight，即算出上图表格的高度</li>
+<li>计算出最小权重值minWeight，用来与maxWeight比较判断是否有权重差</li>
+<li>计算出权重和weightSum，用来与调用次数做计算取余</li>
+<li>mod为当前调用次数与权重和的余数，即表格上的数标</li>
+<li>得到数标值也就确定了目标服务器</li>
+<li>源码的双层for循环就是遍历表格，得到目标服务器</li>
+<li>每次遍历没有命中时，v.decrement()是为了跳过表格中灰色部分</li>
+<li>每次遍历没用命中时，mod减1可理解为从表格数标0位置开始往下走了一步</li>
+<li>当mod &#x3D;&#x3D; 0且v.getValue() &gt; 0时，表示走到指定的位置，即选中的服务器</li>
+</ul>
+<p>啰嗦了一点，其实算法时比较简单的，可以结合以下源码和表格理解。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">RoundRobinLoadBalance</span> <span class="keyword">extends</span> <span class="title class_">AbstractLoadBalance</span> &#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="type">String</span> <span class="variable">NAME</span> <span class="operator">=</span> <span class="string">&quot;roundrobin&quot;</span>;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> ConcurrentMap&lt;String, AtomicPositiveInteger&gt; sequences = <span class="keyword">new</span> <span class="title class_">ConcurrentHashMap</span>&lt;String, AtomicPositiveInteger&gt;();</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="keyword">protected</span> &lt;T&gt; Invoker&lt;T&gt; <span class="title function_">doSelect</span><span class="params">(List&lt;Invoker&lt;T&gt;&gt; invokers, URL url, Invocation invocation)</span> &#123;</span><br><span class="line">        <span class="type">String</span> <span class="variable">key</span> <span class="operator">=</span> invokers.get(<span class="number">0</span>).getUrl().getServiceKey() + <span class="string">&quot;.&quot;</span> + invocation.getMethodName();</span><br><span class="line">        <span class="type">int</span> <span class="variable">length</span> <span class="operator">=</span> invokers.size(); <span class="comment">// Number of invokers</span></span><br><span class="line">        <span class="type">int</span> <span class="variable">maxWeight</span> <span class="operator">=</span> <span class="number">0</span>; <span class="comment">// The maximum weight</span></span><br><span class="line">        <span class="type">int</span> <span class="variable">minWeight</span> <span class="operator">=</span> Integer.MAX_VALUE; <span class="comment">// The minimum weight</span></span><br><span class="line">        <span class="keyword">final</span> LinkedHashMap&lt;Invoker&lt;T&gt;, IntegerWrapper&gt; invokerToWeightMap = <span class="keyword">new</span> <span class="title class_">LinkedHashMap</span>&lt;Invoker&lt;T&gt;, IntegerWrapper&gt;();</span><br><span class="line">        <span class="type">int</span> <span class="variable">weightSum</span> <span class="operator">=</span> <span class="number">0</span>;</span><br><span class="line">        <span class="keyword">for</span> (<span class="type">int</span> <span class="variable">i</span> <span class="operator">=</span> <span class="number">0</span>; i &lt; length; i++) &#123;</span><br><span class="line">            <span class="type">int</span> <span class="variable">weight</span> <span class="operator">=</span> getWeight(invokers.get(i), invocation);</span><br><span class="line">            maxWeight = Math.max(maxWeight, weight); <span class="comment">// Choose the maximum weight</span></span><br><span class="line">            minWeight = Math.min(minWeight, weight); <span class="comment">// Choose the minimum weight</span></span><br><span class="line">            <span class="keyword">if</span> (weight &gt; <span class="number">0</span>) &#123;</span><br><span class="line">                invokerToWeightMap.put(invokers.get(i), <span class="keyword">new</span> <span class="title class_">IntegerWrapper</span>(weight));</span><br><span class="line">                weightSum += weight;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="type">AtomicPositiveInteger</span> <span class="variable">sequence</span> <span class="operator">=</span> sequences.get(key);</span><br><span class="line">        <span class="keyword">if</span> (sequence == <span class="literal">null</span>) &#123;</span><br><span class="line">            sequences.putIfAbsent(key, <span class="keyword">new</span> <span class="title class_">AtomicPositiveInteger</span>());</span><br><span class="line">            sequence = sequences.get(key);</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="type">int</span> <span class="variable">currentSequence</span> <span class="operator">=</span> sequence.getAndIncrement();</span><br><span class="line">        <span class="keyword">if</span> (maxWeight &gt; <span class="number">0</span> &amp;&amp; minWeight &lt; maxWeight) &#123;</span><br><span class="line">            <span class="type">int</span> <span class="variable">mod</span> <span class="operator">=</span> currentSequence % weightSum;</span><br><span class="line">            <span class="keyword">for</span> (<span class="type">int</span> <span class="variable">i</span> <span class="operator">=</span> <span class="number">0</span>; i &lt; maxWeight; i++) &#123;</span><br><span class="line">                <span class="keyword">for</span> (Map.Entry&lt;Invoker&lt;T&gt;, IntegerWrapper&gt; each : invokerToWeightMap.entrySet()) &#123;</span><br><span class="line">                    <span class="keyword">final</span> Invoker&lt;T&gt; k = each.getKey();</span><br><span class="line">                    <span class="keyword">final</span> <span class="type">IntegerWrapper</span> <span class="variable">v</span> <span class="operator">=</span> each.getValue();</span><br><span class="line">                    <span class="keyword">if</span> (mod == <span class="number">0</span> &amp;&amp; v.getValue() &gt; <span class="number">0</span>) &#123;</span><br><span class="line">                        <span class="keyword">return</span> k;</span><br><span class="line">                    &#125;</span><br><span class="line">                    <span class="keyword">if</span> (v.getValue() &gt; <span class="number">0</span>) &#123;</span><br><span class="line">                        v.decrement();</span><br><span class="line">                        mod--;</span><br><span class="line">                    &#125;</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="comment">// Round robin</span></span><br><span class="line">        <span class="keyword">return</span> invokers.get(currentSequence % length);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">class</span> <span class="title class_">IntegerWrapper</span> &#123;</span><br><span class="line">        <span class="keyword">private</span> <span class="type">int</span> value;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">public</span> <span class="title function_">IntegerWrapper</span><span class="params">(<span class="type">int</span> value)</span> &#123;</span><br><span class="line">            <span class="built_in">this</span>.value = value;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">public</span> <span class="type">int</span> <span class="title function_">getValue</span><span class="params">()</span> &#123;</span><br><span class="line">            <span class="keyword">return</span> value;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">setValue</span><span class="params">(<span class="type">int</span> value)</span> &#123;</span><br><span class="line">            <span class="built_in">this</span>.value = value;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">decrement</span><span class="params">()</span> &#123;</span><br><span class="line">            <span class="built_in">this</span>.value--;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="带权重轮询（优化版）"><a href="#带权重轮询（优化版）" class="headerlink" title="带权重轮询（优化版）"></a>带权重轮询（优化版）</h3><p>本以为上面的轮询算法就可以直接拿来借鉴，但是发现dubbo最近有个提交是优化该算法的，只是还没有并入迭代的版本，处于未正式发布状态。我们来看看相关的issue。</p>
+<p>问题发起的issue：<a target="_blank" rel="noopener" href="https://github.com/apache/incubator-dubbo/issues/2578">https://github.com/apache/incubator-dubbo/issues/2578</a></p>
+<p>接受PR的issue：<a target="_blank" rel="noopener" href="https://github.com/apache/incubator-dubbo/pull/2586">https://github.com/apache/incubator-dubbo/pull/2586</a></p>
+<p>旧算法的时间复杂度是O(n*w)，新算法的时间复杂度为O(n)。n为invokers数，w为weight。</p>
+<p>在极端情况下，个别weight特别大时，会导致旧算法的性能较差。</p>
+<p>还是用表格来表示，在新的算法中，10次请求得到的顺序，如数标所示，即：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">[A, B, A, B, A, A, A, A, B, C]</span><br></pre></td></tr></table></figure>
+
+<p>由于轮训该顺序会不断的重复，其实与前面算法的结果是一样的，只是把前三位挪到了后面而已。</p>
+<p><img src="/images/dubbo-load-balance-round-robin/006tNbRwly1fw96wop4i4j30ac0atmx6.jpg" alt="006tNbRwly1fw96wop4i4j30ac0atmx6"></p>
+<p>新版RoundRobinLoadBalance的算法基于原来的做了改良，特点如下：</p>
+<ul>
+<li>新增indexSeqs，与sequences集合使用。sequences意义与原来不同。</li>
+<li>算法中的index由indexSeqs与invokers的数量取余得到，可理解为表格的横坐标</li>
+<li>算法中的currentWeight由sequeces与maxWeight取余得到，可理解为表格的纵坐标</li>
+<li>用while单层遍历，每次判断当前元素的权重是否大于currentWeight，true即选中</li>
+<li>图中的数标即为遍历选中的顺序</li>
+</ul>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">RoundRobinLoadBalance</span> <span class="keyword">extends</span> <span class="title class_">AbstractLoadBalance</span> &#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="type">String</span> <span class="variable">NAME</span> <span class="operator">=</span> <span class="string">&quot;roundrobin&quot;</span>;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> ConcurrentMap&lt;String, AtomicPositiveInteger&gt; sequences = <span class="keyword">new</span> <span class="title class_">ConcurrentHashMap</span>&lt;String, AtomicPositiveInteger&gt;();</span><br><span class="line"></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> ConcurrentMap&lt;String, AtomicPositiveInteger&gt; indexSeqs = <span class="keyword">new</span> <span class="title class_">ConcurrentHashMap</span>&lt;String, AtomicPositiveInteger&gt;();</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="keyword">protected</span> &lt;T&gt; Invoker&lt;T&gt; <span class="title function_">doSelect</span><span class="params">(List&lt;Invoker&lt;T&gt;&gt; invokers, URL url, Invocation invocation)</span> &#123;</span><br><span class="line">        <span class="type">String</span> <span class="variable">key</span> <span class="operator">=</span> invokers.get(<span class="number">0</span>).getUrl().getServiceKey() + <span class="string">&quot;.&quot;</span> + invocation.getMethodName();</span><br><span class="line">        <span class="type">int</span> <span class="variable">length</span> <span class="operator">=</span> invokers.size(); <span class="comment">// Number of invokers</span></span><br><span class="line">        <span class="type">int</span> <span class="variable">maxWeight</span> <span class="operator">=</span> <span class="number">0</span>; <span class="comment">// The maximum weight</span></span><br><span class="line">        <span class="type">int</span> <span class="variable">minWeight</span> <span class="operator">=</span> Integer.MAX_VALUE; <span class="comment">// The minimum weight</span></span><br><span class="line">        <span class="keyword">final</span> List&lt;Invoker&lt;T&gt;&gt; nonZeroWeightedInvokers = <span class="keyword">new</span> <span class="title class_">ArrayList</span>&lt;&gt;();</span><br><span class="line">        <span class="keyword">for</span> (<span class="type">int</span> <span class="variable">i</span> <span class="operator">=</span> <span class="number">0</span>; i &lt; length; i++) &#123;</span><br><span class="line">            <span class="type">int</span> <span class="variable">weight</span> <span class="operator">=</span> getWeight(invokers.get(i), invocation);</span><br><span class="line">            maxWeight = Math.max(maxWeight, weight); <span class="comment">// Choose the maximum weight</span></span><br><span class="line">            minWeight = Math.min(minWeight, weight); <span class="comment">// Choose the minimum weight</span></span><br><span class="line">            <span class="keyword">if</span> (weight &gt; <span class="number">0</span>) &#123;</span><br><span class="line">                nonZeroWeightedInvokers.add(invokers.get(i));</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="type">AtomicPositiveInteger</span> <span class="variable">sequence</span> <span class="operator">=</span> sequences.get(key);</span><br><span class="line">        <span class="keyword">if</span> (sequence == <span class="literal">null</span>) &#123;</span><br><span class="line">            sequences.putIfAbsent(key, <span class="keyword">new</span> <span class="title class_">AtomicPositiveInteger</span>());</span><br><span class="line">            sequence = sequences.get(key);</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (maxWeight &gt; <span class="number">0</span> &amp;&amp; minWeight &lt; maxWeight) &#123;</span><br><span class="line">            <span class="type">AtomicPositiveInteger</span> <span class="variable">indexSeq</span> <span class="operator">=</span> indexSeqs.get(key);</span><br><span class="line">            <span class="keyword">if</span> (indexSeq == <span class="literal">null</span>) &#123;</span><br><span class="line">                indexSeqs.putIfAbsent(key, <span class="keyword">new</span> <span class="title class_">AtomicPositiveInteger</span>(-<span class="number">1</span>));</span><br><span class="line">                indexSeq = indexSeqs.get(key);</span><br><span class="line">            &#125;</span><br><span class="line">            length = nonZeroWeightedInvokers.size();</span><br><span class="line">            <span class="keyword">while</span> (<span class="literal">true</span>) &#123;</span><br><span class="line">                <span class="type">int</span> <span class="variable">index</span> <span class="operator">=</span> indexSeq.incrementAndGet() % length;</span><br><span class="line">                <span class="type">int</span> currentWeight;</span><br><span class="line">                <span class="keyword">if</span> (index == <span class="number">0</span>) &#123;</span><br><span class="line">                    currentWeight = sequence.incrementAndGet() % maxWeight;</span><br><span class="line">                &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                    currentWeight = sequence.get() % maxWeight;</span><br><span class="line">                &#125;</span><br><span class="line">                <span class="keyword">if</span> (getWeight(nonZeroWeightedInvokers.get(index), invocation) &gt; currentWeight) &#123;</span><br><span class="line">                    <span class="keyword">return</span> nonZeroWeightedInvokers.get(index);</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="comment">// Round robin</span></span><br><span class="line">        <span class="keyword">return</span> invokers.get(sequence.getAndIncrement() % length);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="性能测试"><a href="#性能测试" class="headerlink" title="性能测试"></a>性能测试</h3><p>这里简单提供下我本地测试的数据，我模拟了100w次请求，造了10个invoker，权重分别为：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">[100,100,200,200,300,300,400,400,500,50000]</span><br></pre></td></tr></table></figure>
+
+<p>故意让最后一个权重设置大一点，得到结果如下：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">优化前耗时：548445 mills</span><br><span class="line">请求分布：[2000,2000,4000,4000,6000,6000,7925,7925,9825,950325]</span><br><span class="line"></span><br><span class="line">优化后耗时：1665 millis</span><br><span class="line">请求分布：[1999,1999,3999,3999,5999,5999,7927,7927,9826,950326]</span><br></pre></td></tr></table></figure>
+
+<p>在以上条件，耗时竟相差330倍左右，看来这个优化后续很快就会纳入正式版中。</p>
+<p>由于篇幅原因，就不贴测试代码与机器配置了，这里只是提供一些测试报告辅助说明。</p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>原本只是为了了解dubbo负载均衡轮询带权重的实现，却意外收获了该算法的优化。我们经常听说<code>时间换空间，空间换时间</code>，这里便是典型的优化案例，利用少量的空间换取时间，将时间复杂度从O(n*w)降到O(n)。</p>
+<p>在以后的工作中，要多考虑性能上的优化，一般多重循环都有优化空间。</p>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          
+
+<div class="post-copyright">
+<ul>
+  <li class="post-copyright-author">
+      <strong>本文作者： </strong>Stephen Ni
+  </li>
+  <li class="post-copyright-link">
+      <strong>本文链接：</strong>
+      <a href="https://nisiyong.github.io/posts/dubbo-load-balance-round-robin/" title="Dubbo负载均衡之加权轮训">https://nisiyong.github.io/posts/dubbo-load-balance-round-robin/</a>
+  </li>
+  <li class="post-copyright-license">
+      <strong>版权声明： </strong>本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-nd/4.0/" rel="noopener" target="_blank"><i class="fab fa-fw fa-creative-commons"></i>BY-NC-ND</a> 许可协议。转载请注明出处！
+  </li>
+</ul>
+</div>
+
+          <div class="post-tags">
+              <a href="/tags/dubbo/" rel="tag"># dubbo</a>
+              <a href="/tags/loadbalance/" rel="tag"># loadbalance</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/posts/how-to-create-a-sudo-user-on-centos-7/" rel="prev" title="如何在CentOS 7中创建sudo用户">
+                  <i class="fa fa-chevron-left"></i> 如何在CentOS 7中创建sudo用户
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/posts/distributed-id-design-and-implementation/" rel="next" title="分布式唯一ID的方案与实现">
+                  分布式唯一ID的方案与实现 <i class="fa fa-chevron-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+    
+  <div class="comments" id="disqus_thread">
+    <noscript>Please enable JavaScript to view the comments powered by Disqus.</noscript>
+  </div>
+  
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+
+<div class="copyright">
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Stephen Ni</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/" rel="noopener" target="_blank">NexT.Gemini</a> 强力驱动
+  </div>
+
+    </div>
+  </footer>
+
+  
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js" integrity="sha256-XL2inqUJaslATFnHdJOi9GfQ60on8Wx1C2H8DYiN1xY=" crossorigin="anonymous"></script>
+<script src="/js/comments.js"></script><script src="/js/utils.js"></script><script src="/js/motion.js"></script><script src="/js/next-boot.js"></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.4.1/search.js" integrity="sha256-1kfA5uHPf65M5cphT2dvymhkuyHPQp5A53EGZOnOLmc=" crossorigin="anonymous"></script>
+<script src="/js/third-party/search/local-search.js"></script>
+
+
+
+
+
+  
+
+
+
+
+<script class="next-config" data-name="disqus" type="application/json">{"enable":true,"shortname":"nisiyong","count":true,"i18n":{"disqus":"disqus"}}</script>
+<script src="/js/third-party/comments/disqus.js"></script>
+
+</body>
+</html>

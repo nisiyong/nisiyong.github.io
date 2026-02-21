@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222"><meta name="generator" content="Hexo 6.3.0">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha256-HtsXJanqjKTc8vVQjO4YMhiqFoXkfBsjBWcX91T1jr8=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"nisiyong.github.io","root":"/","images":"/images","scheme":"Gemini","darkmode":false,"version":"8.15.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12},"copycode":{"enable":false,"style":null},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"prism":false,"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.xml","localsearch":{"enable":true,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false}}</script><script src="/js/config.js"></script>
+
+    <meta name="description" content="最近在内部准备一个消息中间件的实践分享，顺便整理下RocketMQ的存储设计。存储设计是整个Broker最为重要的部分之一，好比你着手了解一个业务系统的逻辑时，如果先了解其DB表结构设计，再去理解业务代码逻辑就容易的多了。本文通过本地实验及相关文档参考，整理其核心概念的存储设计。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="RocketMQ存储设计剖析">
+<meta property="og:url" content="https://nisiyong.github.io/posts/rocketmq-store-design/index.html">
+<meta property="og:site_name" content="Stephen Ni&#39;s Blog">
+<meta property="og:description" content="最近在内部准备一个消息中间件的实践分享，顺便整理下RocketMQ的存储设计。存储设计是整个Broker最为重要的部分之一，好比你着手了解一个业务系统的逻辑时，如果先了解其DB表结构设计，再去理解业务代码逻辑就容易的多了。本文通过本地实验及相关文档参考，整理其核心概念的存储设计。">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://nisiyong.github.io/images/rocketmq-store-design/image-20211205163509696.png">
+<meta property="og:image" content="https://nisiyong.github.io/images/rocketmq-store-design/image-20211205171926534.png">
+<meta property="og:image" content="https://nisiyong.github.io/images/rocketmq-store-design/image-20211205223634676.png">
+<meta property="article:published_time" content="2021-12-05T16:13:26.000Z">
+<meta property="article:modified_time" content="2026-02-21T14:49:09.134Z">
+<meta property="article:author" content="Stephen Ni">
+<meta property="article:tag" content="rocketmq">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://nisiyong.github.io/images/rocketmq-store-design/image-20211205163509696.png">
+
+
+<link rel="canonical" href="https://nisiyong.github.io/posts/rocketmq-store-design/">
+
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://nisiyong.github.io/posts/rocketmq-store-design/","path":"posts/rocketmq-store-design/","title":"RocketMQ存储设计剖析"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>RocketMQ存储设计剖析 | Stephen Ni's Blog</title>
+  
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-HZ9W81HNR8"></script>
+  <script class="next-config" data-name="google_analytics" type="application/json">{"tracking_id":"G-HZ9W81HNR8","only_pageview":false}</script>
+  <script src="/js/third-party/analytics/google-analytics.js"></script>
+
+
+
+
+
+
+
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+<link rel="alternate" href="/atom.xml" title="Stephen Ni's Blog" type="application/atom+xml">
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Stephen Ni's Blog</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>关于</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup"><div class="search-header">
+  <span class="search-icon">
+    <i class="fa fa-search"></i>
+  </span>
+  <div class="search-input-container">
+    <input autocomplete="off" autocapitalize="off" maxlength="80"
+           placeholder="搜索..." spellcheck="false"
+           type="search" class="search-input">
+  </div>
+  <span class="popup-btn-close" role="button">
+    <i class="fa fa-times-circle"></i>
+  </span>
+</div>
+<div class="search-result-container no-result">
+  <div class="search-result-icon">
+    <i class="fa fa-spinner fa-pulse fa-5x"></i>
+  </div>
+</div>
+
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%AD%98%E5%82%A8%E6%B5%81%E7%A8%8B%E7%AE%80%E4%BB%8B"><span class="nav-number">1.</span> <span class="nav-text">存储流程简介</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%AD%98%E5%82%A8%E7%9B%AE%E5%BD%95%E7%BB%93%E6%9E%84"><span class="nav-number">2.</span> <span class="nav-text">存储目录结构</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#CommitLog%E8%AE%BE%E8%AE%A1"><span class="nav-number">3.</span> <span class="nav-text">CommitLog设计</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#ConsumeQueue%E8%AE%BE%E8%AE%A1"><span class="nav-number">4.</span> <span class="nav-text">ConsumeQueue设计</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#IndexFile%E8%AE%BE%E8%AE%A1"><span class="nav-number">5.</span> <span class="nav-text">IndexFile设计</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%80%BB%E7%BB%93"><span class="nav-number">6.</span> <span class="nav-text">总结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#References"><span class="nav-number">7.</span> <span class="nav-text">References</span></a></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Stephen Ni"
+      src="/uploads/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Stephen Ni</p>
+  <div class="site-description" itemprop="description">成长是克服天性的过程</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">13</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">2</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">16</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/nisiyong" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;nisiyong" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://twitter.com/nisiyong" title="Twitter → https:&#x2F;&#x2F;twitter.com&#x2F;nisiyong" rel="noopener me" target="_blank"><i class="fab fa-twitter fa-fw"></i>Twitter</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="/atom.xml" title="RSS → atom.xml" rel="noopener me"><i class="fa fa-rss fa-fw"></i>RSS</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://weibo.com/nisiyong" title="Weibo → https:&#x2F;&#x2F;weibo.com&#x2F;nisiyong" rel="noopener me" target="_blank"><i class="fab fa-weibo fa-fw"></i>Weibo</a>
+      </span>
+  </div>
+  <div class="cc-license animated" itemprop="license">
+    <a href="https://creativecommons.org/licenses/by-nc-nd/4.0/" class="cc-opacity" rel="noopener" target="_blank"><img src="https://cdnjs.cloudflare.com/ajax/libs/creativecommons-vocabulary/2020.11.3/assets/license_badges/small/by_nc_nd.svg" alt="Creative Commons"></a>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://nisiyong.github.io/posts/rocketmq-store-design/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/uploads/avatar.jpg">
+      <meta itemprop="name" content="Stephen Ni">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Stephen Ni's Blog">
+      <meta itemprop="description" content="成长是克服天性的过程">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="RocketMQ存储设计剖析 | Stephen Ni's Blog">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          RocketMQ存储设计剖析
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2021-12-05 16:13:26" itemprop="dateCreated datePublished" datetime="2021-12-05T16:13:26+00:00">2021-12-05</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E6%8A%80%E6%9C%AF%E6%BC%AB%E8%B0%88/" itemprop="url" rel="index"><span itemprop="name">技术漫谈</span></a>
+        </span>
+    </span>
+
+  
+  
+  <span class="post-meta-item">
+    
+      <span class="post-meta-item-icon">
+        <i class="far fa-comment"></i>
+      </span>
+      <span class="post-meta-item-text">Disqus：</span>
+    
+    <a title="disqus" href="/posts/rocketmq-store-design/#disqus_thread" itemprop="discussionUrl">
+      <span class="post-comments-count disqus-comment-count" data-disqus-identifier="posts/rocketmq-store-design/" itemprop="commentCount"></span>
+    </a>
+  </span>
+  
+  
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+        <p>最近在内部准备一个消息中间件的实践分享，顺便整理下RocketMQ的存储设计。存储设计是整个Broker最为重要的部分之一，好比你着手了解一个业务系统的逻辑时，如果先了解其DB表结构设计，再去理解业务代码逻辑就容易的多了。本文通过本地实验及相关文档参考，整理其核心概念的存储设计。</p>
+<span id="more"></span>
+
+<h2 id="存储流程简介"><a href="#存储流程简介" class="headerlink" title="存储流程简介"></a>存储流程简介</h2><p><img src="/images/rocketmq-store-design/image-20211205163509696.png" alt="image-20211205163509696"></p>
+<p>首先结合官方文档的图片对消息存储的流程有个大致的了解：</p>
+<ol>
+<li><p>所有生产者都会往Broker指定的Topic发消息，在Broker收到消息后，无论消息属于哪个Topic，都会封装成一个标准格式后追加存储到一个<code>CommitLog</code>文件上。</p>
+</li>
+<li><p>存到到CommitLog文件后Broker会将这条消息在<code>CommitLog</code>的物理位置追加存储到一个<code>ConsumeQueue</code>的文件上，每个Topic都有多个<code>ConsumeQueue</code>，默认Broker在追加存储时会轮询这个Topic下的所有<code>ConsumeQueue</code>文件。</p>
+</li>
+</ol>
+<p>通过以上了解可以得知，其实CommitLog是消息的<strong>物理存储</strong>，而ConsumeQueue是消息的<strong>逻辑存储</strong>，类似于索引文件。另外在RocketMQ还提供了消息Key查询的功能特性，其实现也是在消息持久化后生成的索引文件IndexFile，在上图没有所有说明。</p>
+<h2 id="存储目录结构"><a href="#存储目录结构" class="headerlink" title="存储目录结构"></a>存储目录结构</h2><p>RocketMQ的每个Broker启动后，会创建相应的存储目录来存储消息，默认目录在<code>~/store</code>，以下为其存储层级结构：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line">store</span><br><span class="line">├── abort</span><br><span class="line">├── checkpoint</span><br><span class="line">├── commitlog</span><br><span class="line">│   ├── 00000000000000000000</span><br><span class="line">│   └── 00000000001073741824</span><br><span class="line">├── config</span><br><span class="line">│   ├── consumerFilter.json</span><br><span class="line">│   ├── consumerFilter.json.bak</span><br><span class="line">│   ├── consumerOffset.json</span><br><span class="line">│   ├── consumerOffset.json.bak</span><br><span class="line">│   ├── delayOffset.json</span><br><span class="line">│   ├── delayOffset.json.bak</span><br><span class="line">│   ├── subscriptionGroup.json</span><br><span class="line">│   ├── topics.json</span><br><span class="line">│   └── topics.json.bak</span><br><span class="line">├── consumequeue</span><br><span class="line">│   └── TopicTest</span><br><span class="line">│       ├── 0</span><br><span class="line">│       │   └── 00000000000000000000</span><br><span class="line">│       ├── 1</span><br><span class="line">│       │   └── 00000000000000000000</span><br><span class="line">│       ├── 2</span><br><span class="line">│       │   └── 00000000000000000000</span><br><span class="line">│       └── 3</span><br><span class="line">│           └── 00000000000000000000</span><br><span class="line">├── index</span><br><span class="line">│   └── 20211204001412810</span><br><span class="line">└── lock</span><br></pre></td></tr></table></figure>
+
+<h2 id="CommitLog设计"><a href="#CommitLog设计" class="headerlink" title="CommitLog设计"></a>CommitLog设计</h2><p>CommitLog是一种常见的设计思想，相关内容可以通过Martin Fowler的<a target="_blank" rel="noopener" href="https://martinfowler.com/articles/patterns-of-distributed-systems/wal.html">Write-Ahead Log</a>了解，RocketMQ的CommitLog设计在里面都有相应的体现，如：1）为了防止单个CommitLog文件过大，RocketMQ对CommitLog文件做了分段拆分，默认1个文件为1GB。2）为了防止CommitLog文件无限追加导致存储不足，RocketMQ默认值保留3天的数据，超期的CommitLog会被清理删除。</p>
+<p>CommitLog每个文件都以字节的offset来命名，从0开始（固定长度，左边做0填充），如第2个文件名可以通过计算获得，依此类推。</p>
+<blockquote>
+<p>1GB &#x3D; 1 * 1024 * 1024 * 1024 Byte &#x3D; 1073741824 Byte</p>
+</blockquote>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">➜  ll store/commitlog</span><br><span class="line">total 376</span><br><span class="line">-rw-r--r--  1 nisiyong  staff   1.0G Dec  4 00:14 00000000000000000000</span><br><span class="line">-rw-r--r--  1 nisiyong  staff   1.0G Dec  4 00:14 00000000001073741824</span><br></pre></td></tr></table></figure>
+
+<p>每条消息的编码格式如下表格，并追加到对应的CommitLog文件上，通过表格可得知每条消息的其中的固定部分占90个字节。</p>
+<table>
+<thead>
+<tr>
+<th>顺序</th>
+<th>字段名称</th>
+<th>数据类型</th>
+<th>字节数</th>
+<th>字段说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td>MsgLength</td>
+<td>Int</td>
+<td>4</td>
+<td>消息总长度</td>
+</tr>
+<tr>
+<td>2</td>
+<td>MagicCode</td>
+<td>Int</td>
+<td>4</td>
+<td>魔数，固定值0xdaa320a7</td>
+</tr>
+<tr>
+<td>3</td>
+<td>BodyCrc</td>
+<td>Int</td>
+<td>4</td>
+<td>消息内容CRC校验码</td>
+</tr>
+<tr>
+<td>4</td>
+<td>QueueId</td>
+<td>Int</td>
+<td>4</td>
+<td>消息的ConsumeQueue的ID</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Flag</td>
+<td>Int</td>
+<td>4</td>
+<td>消息FLAG，RocketMQ不做处理，供应用程序使用</td>
+</tr>
+<tr>
+<td>6</td>
+<td>QueueOffset</td>
+<td>Long</td>
+<td>8</td>
+<td>消息在ConsumeQueue上的偏移量</td>
+</tr>
+<tr>
+<td>7</td>
+<td>PhysicalOffset</td>
+<td>Long</td>
+<td>8</td>
+<td>消息在CommitLog上的偏移量</td>
+</tr>
+<tr>
+<td>8</td>
+<td>SysFlag</td>
+<td>Int</td>
+<td>4</td>
+<td>消息系统FLAG，如是否压缩，是否为消息等</td>
+</tr>
+<tr>
+<td>9</td>
+<td>BornTimestamp</td>
+<td>Long</td>
+<td>8</td>
+<td>消息在客户端的生成的时间</td>
+</tr>
+<tr>
+<td>10</td>
+<td>BornHost</td>
+<td>Long</td>
+<td>8</td>
+<td>消息在客户端的IP:PORT</td>
+</tr>
+<tr>
+<td>11</td>
+<td>StoreTimestamp</td>
+<td>Long</td>
+<td>8</td>
+<td>消息在服务端Broker的存储时间</td>
+</tr>
+<tr>
+<td>12</td>
+<td>StoreHost</td>
+<td>Long</td>
+<td>8</td>
+<td>消息在服务端Broker的IP:PORT</td>
+</tr>
+<tr>
+<td>13</td>
+<td>ReconsumeTimes</td>
+<td>Int</td>
+<td>4</td>
+<td>消息的重试次数</td>
+</tr>
+<tr>
+<td>14</td>
+<td>PrepareTransactionOffset</td>
+<td>Long</td>
+<td>8</td>
+<td>事物消息的偏移量</td>
+</tr>
+<tr>
+<td>15</td>
+<td>BodyLength</td>
+<td>Int</td>
+<td>4</td>
+<td>消息体的长度</td>
+</tr>
+<tr>
+<td>16</td>
+<td>Body</td>
+<td>byte[]</td>
+<td>array size</td>
+<td>消息内容</td>
+</tr>
+<tr>
+<td>17</td>
+<td>TopicLength</td>
+<td>byte</td>
+<td>1</td>
+<td>Topic的长度</td>
+</tr>
+<tr>
+<td>18</td>
+<td>Topic</td>
+<td>byte[]</td>
+<td>array size</td>
+<td>Topic名称</td>
+</tr>
+<tr>
+<td>19</td>
+<td>PropertiesLength</td>
+<td>byte</td>
+<td>1</td>
+<td>扩展属性长度</td>
+</tr>
+<tr>
+<td>20</td>
+<td>Properties</td>
+<td>byte[]</td>
+<td>array size</td>
+<td>扩展属性内容</td>
+</tr>
+</tbody></table>
+<p>如下是本地磁盘的通过<code>xxd</code>命令获取的commitlog二进制文本信息，通过魔数<code>daa320a7</code>可以区分出每一条消息的大致位置。<img src="/images/rocketmq-store-design/image-20211205171926534.png" alt="image-20211205171926534"></p>
+<h2 id="ConsumeQueue设计"><a href="#ConsumeQueue设计" class="headerlink" title="ConsumeQueue设计"></a>ConsumeQueue设计</h2><p>RocketMQ创建Topic时都会指定需要几个Queue，这些Queue会均衡的分配到各个Broker服务器上。Queue在Topic目录下，名称也类似commitlog按offset来命名。</p>
+<p>ConsumeQueue文件主要存储消息的摘要信息，在commitlog之上多了一层逻辑层抽象，便于Topic隔离维护等</p>
+<p>默认1个ConsumeQueue文件包含30w个条目，每个条目大小固定共20个字节，结构如下：</p>
+<table>
+<thead>
+<tr>
+<th>顺序</th>
+<th>字段名称</th>
+<th>数据类型</th>
+<th>字节数</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td>CommitLogOffset</td>
+<td>Long</td>
+<td>8</td>
+</tr>
+<tr>
+<td>2</td>
+<td>MsgLength</td>
+<td>Int</td>
+<td>4</td>
+</tr>
+<tr>
+<td>3</td>
+<td>TagHashCode</td>
+<td>Long</td>
+<td>8</td>
+</tr>
+</tbody></table>
+<p>通过计算可得知1个ConsumeQueue文件写满后大小约<code>5.7MB</code></p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">➜  ll store/consumequeue/TopicTest/0</span><br><span class="line">total 11720</span><br><span class="line">-rw-r--r--  1 nisiyong  staff   5.7M Dec  4 00:14 00000000000000000000</span><br></pre></td></tr></table></figure>
+
+<h2 id="IndexFile设计"><a href="#IndexFile设计" class="headerlink" title="IndexFile设计"></a>IndexFile设计</h2><p>RocketMQ为了方便消息检索，支持了用户在发送消息时设置自定的Key，消息在服务端根据Key进行索引构建，在后续的控制台可以通过该Key来查询该消息。</p>
+<p>Broker端的IndexFile就是这些Key的索引文件，与上述的文件命名不同，IndexFile是更加时间戳来命名的，方便后续结合时间维度来查询。每个IndexFile由以下3部分组成：</p>
+<ul>
+<li>IndexHeader，共40个字节</li>
+<li>SlotTable，每个Slot占4个字节，存放消息Key的hashCode，默认1个IndexFile有500w个Slot</li>
+<li>IndexItems，每个IndexItem占20个字节，默认1个IndexFile有2000w个IndexItem</li>
+</ul>
+<p>通过计算可得知1个Index文件写满后大小约<code>401MB</code></p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">➜  ll store/index</span><br><span class="line">total 39104</span><br><span class="line">-rw-r--r--  1 nisiyong  staff   401M Dec  5 00:57 20211204001412810</span><br></pre></td></tr></table></figure>
+
+<p>固定40个字节的IndexHeader结构如下：</p>
+<table>
+<thead>
+<tr>
+<th>顺序</th>
+<th>字段名称</th>
+<th>数据类型</th>
+<th>字节数</th>
+<th>字段说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td>BeginTimestamp</td>
+<td>Long</td>
+<td>8</td>
+<td>该索引文件内消息的最小存储时间</td>
+</tr>
+<tr>
+<td>2</td>
+<td>EndTimestamp</td>
+<td>Long</td>
+<td>8</td>
+<td>该索引文件内消息的最大存储时间</td>
+</tr>
+<tr>
+<td>3</td>
+<td>BeginPhyoffset</td>
+<td>Long</td>
+<td>8</td>
+<td>该索引文件内消息的最小CommitLog Offset</td>
+</tr>
+<tr>
+<td>4</td>
+<td>EndPhyoffset</td>
+<td>Long</td>
+<td>8</td>
+<td>该索引文件内消息的最大CommitLog Offset</td>
+</tr>
+<tr>
+<td>5</td>
+<td>HashSlotCount</td>
+<td>Int</td>
+<td>4</td>
+<td>该索引文件的Slot数量，默认500w个</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Index</td>
+<td>Int</td>
+<td>4</td>
+<td>该索引文件的IndexItem数量，默认2000w个</td>
+</tr>
+</tbody></table>
+<p>每个IndexItem的结构如下：</p>
+<table>
+<thead>
+<tr>
+<th>顺序</th>
+<th>字段名称</th>
+<th>数据类型</th>
+<th>字节数</th>
+<th>字段说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td>HashCode</td>
+<td>Int</td>
+<td>4</td>
+<td>消息Key字符串的HashCode</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Phyoffset</td>
+<td>Long</td>
+<td>8</td>
+<td>消息的ComimitLog Offset</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Timediff</td>
+<td>Int</td>
+<td>4</td>
+<td>与第一条消息的时间错差值，小于0该消息无效</td>
+</tr>
+<tr>
+<td>4</td>
+<td>PreIndexNo</td>
+<td>Int</td>
+<td>4</td>
+<td>上一条消息的IndexItem的索引，出现Hash碰撞时，形成链表结构</td>
+</tr>
+</tbody></table>
+<p>IndexFile存储过程简单说明下，结合下图重点关注以下几点：</p>
+<ul>
+<li>每条消息的Key都能计算出一个4个字节Int类型的HashCode，通过该HashCod%500w得到slot的位置</li>
+<li>每条消息的信息可以生成一个IndexItem，只要IndexItems有空间，就直接追加存放，并把该IndexItem的位置索引存放到对应的slot上</li>
+<li>当出现hash碰撞时，新的IndexItem需要记录上一个slot的IndexItem位置，然后用新的IndexItem的位置覆盖到slot的位置</li>
+</ul>
+<p><img src="/images/rocketmq-store-design/image-20211205223634676.png" alt="image-20211205223634676"></p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>至此RocketMQ消息在服务端的存储设计及相关数据结构已经介绍完毕，由于篇幅关系只介绍了消息生产写入的逻辑，而消费端如何消费读取消息，以及消费的进度位点没有详细介绍，这块大家可以结合<code>store/config/consumerOffset.json</code>文件内容进行了解，逻辑比较简单。总体来看，对存储的数据结构有较为清晰的了解对实际使用时帮助比较大，后续在学习一些复杂的中间件时先从总体关注其核心功能设计，再逐步去了解局部的功能逻辑。</p>
+<h2 id="References"><a href="#References" class="headerlink" title="References"></a>References</h2><ul>
+<li><a target="_blank" rel="noopener" href="https://github.com/apache/rocketmq/blob/master/docs/cn/design.md">https://github.com/apache/rocketmq/blob/master/docs/cn/design.md</a></li>
+<li><a target="_blank" rel="noopener" href="https://martinfowler.com/articles/patterns-of-distributed-systems/wal.html">https://martinfowler.com/articles/patterns-of-distributed-systems/wal.html</a></li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          
+
+<div class="post-copyright">
+<ul>
+  <li class="post-copyright-author">
+      <strong>本文作者： </strong>Stephen Ni
+  </li>
+  <li class="post-copyright-link">
+      <strong>本文链接：</strong>
+      <a href="https://nisiyong.github.io/posts/rocketmq-store-design/" title="RocketMQ存储设计剖析">https://nisiyong.github.io/posts/rocketmq-store-design/</a>
+  </li>
+  <li class="post-copyright-license">
+      <strong>版权声明： </strong>本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-nd/4.0/" rel="noopener" target="_blank"><i class="fab fa-fw fa-creative-commons"></i>BY-NC-ND</a> 许可协议。转载请注明出处！
+  </li>
+</ul>
+</div>
+
+          <div class="post-tags">
+              <a href="/tags/rocketmq/" rel="tag"># rocketmq</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/posts/pulsar-messaging-model/" rel="prev" title="Pulsar消息处理模型">
+                  <i class="fa fa-chevron-left"></i> Pulsar消息处理模型
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/posts/java-logging-frameworks/" rel="next" title="Java日志框架生态">
+                  Java日志框架生态 <i class="fa fa-chevron-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+    
+  <div class="comments" id="disqus_thread">
+    <noscript>Please enable JavaScript to view the comments powered by Disqus.</noscript>
+  </div>
+  
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+
+<div class="copyright">
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Stephen Ni</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/" rel="noopener" target="_blank">NexT.Gemini</a> 强力驱动
+  </div>
+
+    </div>
+  </footer>
+
+  
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js" integrity="sha256-XL2inqUJaslATFnHdJOi9GfQ60on8Wx1C2H8DYiN1xY=" crossorigin="anonymous"></script>
+<script src="/js/comments.js"></script><script src="/js/utils.js"></script><script src="/js/motion.js"></script><script src="/js/next-boot.js"></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.4.1/search.js" integrity="sha256-1kfA5uHPf65M5cphT2dvymhkuyHPQp5A53EGZOnOLmc=" crossorigin="anonymous"></script>
+<script src="/js/third-party/search/local-search.js"></script>
+
+
+
+
+
+  
+
+
+
+
+<script class="next-config" data-name="disqus" type="application/json">{"enable":true,"shortname":"nisiyong","count":true,"i18n":{"disqus":"disqus"}}</script>
+<script src="/js/third-party/comments/disqus.js"></script>
+
+</body>
+</html>

@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222"><meta name="generator" content="Hexo 6.3.0">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha256-HtsXJanqjKTc8vVQjO4YMhiqFoXkfBsjBWcX91T1jr8=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"nisiyong.github.io","root":"/","images":"/images","scheme":"Gemini","darkmode":false,"version":"8.15.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12},"copycode":{"enable":false,"style":null},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"prism":false,"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.xml","localsearch":{"enable":true,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false}}</script><script src="/js/config.js"></script>
+
+    <meta name="description" content="最早在推动公司应用容器化过程一直使用内部的容器云平台，由于内部的容器云平台做了一层封装，对 Kubernetes 一些原生的功能开放性不足。近期准备调研 Service Mesh，需要一套干净的 Kubernetes 集群作为 POC 环境做测试，通过查找一些资料，最终选择了用 Rancher 来搭建 Kubernetes，花了半天就搭建完成了。现在搭建一套 Kubernetes 集群来测试学习还">
+<meta property="og:type" content="article">
+<meta property="og:title" content="使用Rancher快速搭建Kubernetes集群">
+<meta property="og:url" content="https://nisiyong.github.io/posts/setup-kubernetes-cluster-in-rancher/index.html">
+<meta property="og:site_name" content="Stephen Ni&#39;s Blog">
+<meta property="og:description" content="最早在推动公司应用容器化过程一直使用内部的容器云平台，由于内部的容器云平台做了一层封装，对 Kubernetes 一些原生的功能开放性不足。近期准备调研 Service Mesh，需要一套干净的 Kubernetes 集群作为 POC 环境做测试，通过查找一些资料，最终选择了用 Rancher 来搭建 Kubernetes，花了半天就搭建完成了。现在搭建一套 Kubernetes 集群来测试学习还">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://nisiyong.github.io/images/setup-kubernetes-cluster-in-rancher/image-20220209142312578.png">
+<meta property="og:image" content="https://nisiyong.github.io/images/setup-kubernetes-cluster-in-rancher/image-20220209141942864.png">
+<meta property="og:image" content="https://nisiyong.github.io/images/setup-kubernetes-cluster-in-rancher/image-20220209174214150.png">
+<meta property="og:image" content="https://nisiyong.github.io/images/setup-kubernetes-cluster-in-rancher/image-20220209175206103.png">
+<meta property="article:published_time" content="2022-02-09T11:33:50.000Z">
+<meta property="article:modified_time" content="2026-02-21T14:49:09.134Z">
+<meta property="article:author" content="Stephen Ni">
+<meta property="article:tag" content="kubernetes">
+<meta property="article:tag" content="rancher">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://nisiyong.github.io/images/setup-kubernetes-cluster-in-rancher/image-20220209142312578.png">
+
+
+<link rel="canonical" href="https://nisiyong.github.io/posts/setup-kubernetes-cluster-in-rancher/">
+
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://nisiyong.github.io/posts/setup-kubernetes-cluster-in-rancher/","path":"posts/setup-kubernetes-cluster-in-rancher/","title":"使用Rancher快速搭建Kubernetes集群"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>使用Rancher快速搭建Kubernetes集群 | Stephen Ni's Blog</title>
+  
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-HZ9W81HNR8"></script>
+  <script class="next-config" data-name="google_analytics" type="application/json">{"tracking_id":"G-HZ9W81HNR8","only_pageview":false}</script>
+  <script src="/js/third-party/analytics/google-analytics.js"></script>
+
+
+
+
+
+
+
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+<link rel="alternate" href="/atom.xml" title="Stephen Ni's Blog" type="application/atom+xml">
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Stephen Ni's Blog</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>关于</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup"><div class="search-header">
+  <span class="search-icon">
+    <i class="fa fa-search"></i>
+  </span>
+  <div class="search-input-container">
+    <input autocomplete="off" autocapitalize="off" maxlength="80"
+           placeholder="搜索..." spellcheck="false"
+           type="search" class="search-input">
+  </div>
+  <span class="popup-btn-close" role="button">
+    <i class="fa fa-times-circle"></i>
+  </span>
+</div>
+<div class="search-result-container no-result">
+  <div class="search-result-icon">
+    <i class="fa fa-spinner fa-pulse fa-5x"></i>
+  </div>
+</div>
+
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E9%A2%84%E5%A4%87%E7%9F%A5%E8%AF%86"><span class="nav-number">1.</span> <span class="nav-text">预备知识</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#Kubernetes%E7%BB%84%E4%BB%B6"><span class="nav-number">1.1.</span> <span class="nav-text">Kubernetes组件</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Rancher%E6%9E%B6%E6%9E%84"><span class="nav-number">1.2.</span> <span class="nav-text">Rancher架构</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E9%83%A8%E7%BD%B2%E6%AD%A5%E9%AA%A4"><span class="nav-number">2.</span> <span class="nav-text">部署步骤</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%87%86%E5%A4%873%E5%8F%B0%E8%99%9A%E6%8B%9F%E6%9C%BA"><span class="nav-number">2.1.</span> <span class="nav-text">准备3台虚拟机</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%AE%89%E8%A3%85Docker"><span class="nav-number">2.2.</span> <span class="nav-text">安装Docker</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%AE%89%E8%A3%85Rancher"><span class="nav-number">2.3.</span> <span class="nav-text">安装Rancher</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%88%9B%E5%BB%BA-Kubertetes-%E9%9B%86%E7%BE%A4"><span class="nav-number">2.4.</span> <span class="nav-text">创建 Kubertetes 集群</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%AE%89%E8%A3%85-Rancher-CLI%EF%BC%8Ckubectl"><span class="nav-number">2.5.</span> <span class="nav-text">安装 Rancher CLI，kubectl</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%80%BB%E7%BB%93"><span class="nav-number">3.</span> <span class="nav-text">总结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#References"><span class="nav-number">4.</span> <span class="nav-text">References</span></a></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Stephen Ni"
+      src="/uploads/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Stephen Ni</p>
+  <div class="site-description" itemprop="description">成长是克服天性的过程</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">13</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">2</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">16</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/nisiyong" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;nisiyong" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://twitter.com/nisiyong" title="Twitter → https:&#x2F;&#x2F;twitter.com&#x2F;nisiyong" rel="noopener me" target="_blank"><i class="fab fa-twitter fa-fw"></i>Twitter</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="/atom.xml" title="RSS → atom.xml" rel="noopener me"><i class="fa fa-rss fa-fw"></i>RSS</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://weibo.com/nisiyong" title="Weibo → https:&#x2F;&#x2F;weibo.com&#x2F;nisiyong" rel="noopener me" target="_blank"><i class="fab fa-weibo fa-fw"></i>Weibo</a>
+      </span>
+  </div>
+  <div class="cc-license animated" itemprop="license">
+    <a href="https://creativecommons.org/licenses/by-nc-nd/4.0/" class="cc-opacity" rel="noopener" target="_blank"><img src="https://cdnjs.cloudflare.com/ajax/libs/creativecommons-vocabulary/2020.11.3/assets/license_badges/small/by_nc_nd.svg" alt="Creative Commons"></a>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://nisiyong.github.io/posts/setup-kubernetes-cluster-in-rancher/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/uploads/avatar.jpg">
+      <meta itemprop="name" content="Stephen Ni">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Stephen Ni's Blog">
+      <meta itemprop="description" content="成长是克服天性的过程">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="使用Rancher快速搭建Kubernetes集群 | Stephen Ni's Blog">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          使用Rancher快速搭建Kubernetes集群
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2022-02-09 11:33:50" itemprop="dateCreated datePublished" datetime="2022-02-09T11:33:50+00:00">2022-02-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E6%8A%80%E6%9C%AF%E6%BC%AB%E8%B0%88/" itemprop="url" rel="index"><span itemprop="name">技术漫谈</span></a>
+        </span>
+    </span>
+
+  
+  
+  <span class="post-meta-item">
+    
+      <span class="post-meta-item-icon">
+        <i class="far fa-comment"></i>
+      </span>
+      <span class="post-meta-item-text">Disqus：</span>
+    
+    <a title="disqus" href="/posts/setup-kubernetes-cluster-in-rancher/#disqus_thread" itemprop="discussionUrl">
+      <span class="post-comments-count disqus-comment-count" data-disqus-identifier="posts/setup-kubernetes-cluster-in-rancher/" itemprop="commentCount"></span>
+    </a>
+  </span>
+  
+  
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+        <p>最早在推动公司应用容器化过程一直使用内部的容器云平台，由于内部的容器云平台做了一层封装，对 Kubernetes 一些原生的功能开放性不足。近期准备调研 Service Mesh，需要一套干净的 Kubernetes 集群作为 POC 环境做测试，通过查找一些资料，最终选择了用 Rancher 来搭建 Kubernetes，花了半天就搭建完成了。现在搭建一套 Kubernetes 集群来测试学习还是挺方便的，这里做些记录分享，尽管这类型的内容比较容易过时，还是希望对读者有些帮助。</p>
+<span id="more"></span>
+
+<h2 id="预备知识"><a href="#预备知识" class="headerlink" title="预备知识"></a>预备知识</h2><h3 id="Kubernetes组件"><a href="#Kubernetes组件" class="headerlink" title="Kubernetes组件"></a>Kubernetes组件</h3><p>通过官方文档 <a target="_blank" rel="noopener" href="https://kubernetes.io/docs/concepts/overview/components/">Kubernetes Components</a> 可以了解到1个 Kubernetes 集群通常用多个节点组成，这些节点主要分为两类：</p>
+<ol>
+<li><strong>Control Plane 节点</strong>：Control Plane 节点包含许多组件，主要负责整个集群的决策，管理所有 Worker 节点，响应处理集群的事件等等。为了高可用一般都会部署多个 Control Plane 节点，并且相关的组件一般部署在同一台服务器上。</li>
+<li><strong>Worker 节点</strong>：主要包含 kubelet 组件和 kube-proxy 组件，一般会有多个节点，kubelet 与 Control Plane 的 API server 交互，负责处理 Worker Node 的所有 Pod，而 kube-proxy 则负责该节点的网络规则，流量转发等。</li>
+</ol>
+<p>以下是官方的架构概览图，可以通过官方文档详细了解。</p>
+<p><img src="/images/setup-kubernetes-cluster-in-rancher/image-20220209142312578.png" alt="image-20220209142312578"></p>
+<h3 id="Rancher架构"><a href="#Rancher架构" class="headerlink" title="Rancher架构"></a>Rancher架构</h3><p>Rancher 是在 Kubernetes 之上更加抽象的一个平台，它让企业更加方便地构建 Kubernetes 集群，用户可以通过 Rancher Kubernetes Engine (RKE) 以图形化的方式快速搭建多个 Kubernetes 集群，还可以结合云厂商的来创建集群等等。用户搭建一个 Rancher Server 就可以标准化地管理多个 Kubernetes 集群，这很大程度上节省了大量的运维成本。</p>
+<p>Rancher Server 的部署方式可以分为两种：</p>
+<ol>
+<li><strong>集群部署</strong>：在生产环境推荐这种使用高可用集群方式部署，Rancher 管理着多个 Kubernetes 集群的，自身的可用性需要做好保障。使用集群部署的方式一般是在一个已有的 Kubernetes 集群上部署，建议这个 Kubernetes 集群专门用来部署 Rancher。</li>
+<li><strong>单节点部署</strong>：在开发测试环境资源有限的情况下，可以在一台安装有 Docker 环境的服务器上，快速搭建单节点的 Rancher，再通过 Rancher 管理多台服务器来创建 Kubernetes 集群。</li>
+</ol>
+<blockquote>
+<p>先搭建 Rancher 后再搭建 Kubernetes，还是先搭建 Kubernetes 再搭建 Rancher？这个问题有点像“鸡生蛋还是蛋生鸡”，一开始我也有点困惑。但是如果在生产环境操作，就强烈建议先有一套专门的小 Kubernetes 集群来部署 Rancher。</p>
+</blockquote>
+<p>以下是官方Rancher的架构图，可以结合官方文档熟悉了解。<a target="_blank" rel="noopener" href="https://rancher.com/docs/rancher/v2.0-v2.4/en/overview/architecture/">Rancher Server Architecture</a></p>
+<p><img src="/images/setup-kubernetes-cluster-in-rancher/image-20220209141942864.png" alt="image-20220209141942864"></p>
+<h2 id="部署步骤"><a href="#部署步骤" class="headerlink" title="部署步骤"></a>部署步骤</h2><p>由于这里搭建 Kubernetes 集群主要是为了开发测试使用，固采用简单的单节点 Docker 的方式来部署 Rancher，Kubernetes 集群则采用3个节点集群的高可用方式来部署。</p>
+<h3 id="准备3台虚拟机"><a href="#准备3台虚拟机" class="headerlink" title="准备3台虚拟机"></a>准备3台虚拟机</h3><ul>
+<li>10.0.0.1：计划安装单机版 Rancher，并作为 Kubernetes 集群的 Control Plane 节点</li>
+<li>10.0.0.2：作为 Kubernetes 集群的 Worker 节点</li>
+<li>10.0.0.3：作为 Kubernetes 集群的 Worker 节点</li>
+</ul>
+<p><strong>相关说明</strong></p>
+<ol>
+<li>以上3台机器均为8核16G，使用 CentOS 7 操作系统</li>
+<li>注意必须禁用交换内存，注释 <code>/etc/fstab</code> 含 swap 关键字的行后重启机器即可</li>
+<li>注意3台机器的 hostname 需要设置成不一样，修改 <code>/etc/hostname</code> 即可</li>
+<li>更多前期准备可以参考 <a target="_blank" rel="noopener" href="https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/#before-you-begin">Installing kubeadm#Before you begin</a>。</li>
+</ol>
+<h3 id="安装Docker"><a href="#安装Docker" class="headerlink" title="安装Docker"></a>安装Docker</h3><p>目前使用 Docker 作为容器运行时，分别在3台机器上安装 Docker，安装过程非常简单，自行参照官方文档进行安装。<a target="_blank" rel="noopener" href="https://docs.docker.com/engine/install/centos/">Install Docker Engine</a></p>
+<p>安装完毕后启动 Docker 并设置默认开机启动 Docker，执行以下命令：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">systemctl start docker</span><br><span class="line">systemctl <span class="built_in">enable</span> docker</span><br></pre></td></tr></table></figure>
+
+<h3 id="安装Rancher"><a href="#安装Rancher" class="headerlink" title="安装Rancher"></a>安装Rancher</h3><p>参照官网文档 <a target="_blank" rel="noopener" href="https://rancher.com/docs/rancher/v2.0-v2.4/en/installation/other-installation-methods/single-node-docker/">Installing Rancher on a Single Node Using Docker</a> 的第一种方式，当然最好指定下版本号，如我使用 <code>rancher/rancher:v2.5.12</code>。</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">docker run -d --name rancher --restart=unless-stopped \</span><br><span class="line">  -p 80:80 -p 443:443 \</span><br><span class="line">  rancher/rancher:v2.5.12</span><br></pre></td></tr></table></figure>
+
+<p>可以通过 <code>docker logs -f rancher</code> 查看标准输出日志，等待一段时间初始化完毕后就可以打开浏览器访问网页 <a target="_blank" rel="noopener" href="http://10.0.0.1/">http://10.0.0.1</a> 。设置下admin密码后就可以开始使用 Rancher 管理端了。</p>
+<h3 id="创建-Kubertetes-集群"><a href="#创建-Kubertetes-集群" class="headerlink" title="创建 Kubertetes 集群"></a>创建 Kubertetes 集群</h3><p>Rancher 创建 Kubernetes 集群也非常多傻瓜式，这里不重复细节，依据官方文档设置来即可。<a target="_blank" rel="noopener" href="https://rancher.com/docs/rancher/v2.6/en/quick-start-guide/deployment/quickstart-manual-setup/">Rancher Manual Quick Start</a></p>
+<p><img src="/images/setup-kubernetes-cluster-in-rancher/image-20220209174214150.png" alt="image-20220209174214150"></p>
+<p>勾选Kubernetes 的节点角色后 Rancher 会生成一些命令，直接拷贝命令到对应的机器运行。在这里提供下我节点角色的分配以供参考：</p>
+<ul>
+<li>10.0.0.1: etcd, Control Plane, Worker</li>
+<li>10.0.0.2: Worker</li>
+<li>10.0.0.3: Worker</li>
+</ul>
+<p>等待各个节点的初始化完成注册后，在 Rancher 就可以看到集群已经就绪可用的状态。</p>
+<p><img src="/images/setup-kubernetes-cluster-in-rancher/image-20220209175206103.png" alt="image-20220209175206103"></p>
+<h3 id="安装-Rancher-CLI，kubectl"><a href="#安装-Rancher-CLI，kubectl" class="headerlink" title="安装 Rancher CLI，kubectl"></a>安装 Rancher CLI，kubectl</h3><p>最后为了方便本地通过终端工具操作 Rancher 及 Kubernetes 集群，建议安装相应的CLI工具，以下相关文档 <a target="_blank" rel="noopener" href="https://rancher.com/docs/rancher/v2.6/en/quick-start-guide/cli/">CLI with Rancher</a> 自行安装。安装完毕后接可以愉快的玩耍了。</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">➜  ~ rancher nodes</span><br><span class="line">ID                       NAME            STATE     POOL      DESCRIPTION</span><br><span class="line">c-rhnr4:m-924c09dacfb5   devserv-01   active</span><br><span class="line">c-rhnr4:m-8842c2782391   devserv-02   active</span><br><span class="line">c-rhnr4:m-286a6c78bd24   devserv-03   active</span><br><span class="line">➜  ~</span><br><span class="line">➜  ~ kubectl get nodes</span><br><span class="line">NAME            STATUS   ROLES                      AGE   VERSION</span><br><span class="line">devserv-01			Ready    controlplane,etcd,worker   25h   v1.20.14</span><br><span class="line">devserv-02			Ready    worker                     24h   v1.20.14</span><br><span class="line">devserv-03			Ready    worker                     24h   v1.20.14</span><br><span class="line">➜  ~</span><br></pre></td></tr></table></figure>
+
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>未来是 Kubernetes 的天下，会有很多云原生相关技术，有一套开发测试环境能快速了解一些技术原理及相关机制，利用好技术红利能帮助企业大大地提高效率及降低成本。也许这内容容易过时，毕竟技术更新迭代太快了，但是这是了解云原生技术的第一步，现在搭建环境已经不是什么难事，唯一要做的就是仔细阅读官方文档，最好不要从其他人的博客文章来获取搭建步骤，当然也包括本文。这里仅作为搭建过程的参考，希望你能通过官方文档自己完成集群的搭建。</p>
+<h2 id="References"><a href="#References" class="headerlink" title="References"></a>References</h2><ul>
+<li>Kubernetes Components, <a target="_blank" rel="noopener" href="https://kubernetes.io/docs/concepts/overview/components/">https://kubernetes.io/docs/concepts/overview/components/</a></li>
+<li>Rancher Architecture, <a target="_blank" rel="noopener" href="https://rancher.com/docs/rancher/v2.0-v2.4/en/overview/architecture/">https://rancher.com/docs/rancher/v2.0-v2.4/en/overview/architecture/</a></li>
+<li>Install Docker Engine, <a target="_blank" rel="noopener" href="https://docs.docker.com/engine/install/">https://docs.docker.com/engine/install/</a></li>
+<li>Installing Rancher on a Single Node Using Docker, <a target="_blank" rel="noopener" href="https://rancher.com/docs/rancher/v2.6/en/installation/other-installation-methods/single-node-docker/">https://rancher.com/docs/rancher/v2.6/en/installation/other-installation-methods/single-node-docker/</a></li>
+<li>Bootstrapping clusters with kubeadm, <a target="_blank" rel="noopener" href="https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/">https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/</a></li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          
+
+<div class="post-copyright">
+<ul>
+  <li class="post-copyright-author">
+      <strong>本文作者： </strong>Stephen Ni
+  </li>
+  <li class="post-copyright-link">
+      <strong>本文链接：</strong>
+      <a href="https://nisiyong.github.io/posts/setup-kubernetes-cluster-in-rancher/" title="使用Rancher快速搭建Kubernetes集群">https://nisiyong.github.io/posts/setup-kubernetes-cluster-in-rancher/</a>
+  </li>
+  <li class="post-copyright-license">
+      <strong>版权声明： </strong>本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-nd/4.0/" rel="noopener" target="_blank"><i class="fab fa-fw fa-creative-commons"></i>BY-NC-ND</a> 许可协议。转载请注明出处！
+  </li>
+</ul>
+</div>
+
+          <div class="post-tags">
+              <a href="/tags/kubernetes/" rel="tag"># kubernetes</a>
+              <a href="/tags/rancher/" rel="tag"># rancher</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/posts/java-logging-frameworks/" rel="prev" title="Java日志框架生态">
+                  <i class="fa fa-chevron-left"></i> Java日志框架生态
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/posts/my-2022/" rel="next" title="我的二零二二">
+                  我的二零二二 <i class="fa fa-chevron-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+    
+  <div class="comments" id="disqus_thread">
+    <noscript>Please enable JavaScript to view the comments powered by Disqus.</noscript>
+  </div>
+  
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+
+<div class="copyright">
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Stephen Ni</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/" rel="noopener" target="_blank">NexT.Gemini</a> 强力驱动
+  </div>
+
+    </div>
+  </footer>
+
+  
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js" integrity="sha256-XL2inqUJaslATFnHdJOi9GfQ60on8Wx1C2H8DYiN1xY=" crossorigin="anonymous"></script>
+<script src="/js/comments.js"></script><script src="/js/utils.js"></script><script src="/js/motion.js"></script><script src="/js/next-boot.js"></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.4.1/search.js" integrity="sha256-1kfA5uHPf65M5cphT2dvymhkuyHPQp5A53EGZOnOLmc=" crossorigin="anonymous"></script>
+<script src="/js/third-party/search/local-search.js"></script>
+
+
+
+
+
+  
+
+
+
+
+<script class="next-config" data-name="disqus" type="application/json">{"enable":true,"shortname":"nisiyong","count":true,"i18n":{"disqus":"disqus"}}</script>
+<script src="/js/third-party/comments/disqus.js"></script>
+
+</body>
+</html>

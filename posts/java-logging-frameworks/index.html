@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222"><meta name="generator" content="Hexo 6.3.0">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha256-HtsXJanqjKTc8vVQjO4YMhiqFoXkfBsjBWcX91T1jr8=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"nisiyong.github.io","root":"/","images":"/images","scheme":"Gemini","darkmode":false,"version":"8.15.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12},"copycode":{"enable":false,"style":null},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"prism":false,"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.xml","localsearch":{"enable":true,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false}}</script><script src="/js/config.js"></script>
+
+    <meta name="description" content="近期Log4j2的安全漏洞影响了全世界Java技术生态的大部分软件系统，在之后的几天发布了若干个版本修复安全漏洞。公司内部的框架近期也在逐步升级，供各业务团队直接使用，在这个过程中顺便梳理了下Java日志框架生态。很多同学分不清楚Log4j，Logback，SLF4j，Log4j2等框架，对于相关的依赖包简直是一头雾水，本文结合之前的一些记录，完整梳理了当前流行的日志框架及推荐使用方式。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Java日志框架生态">
+<meta property="og:url" content="https://nisiyong.github.io/posts/java-logging-frameworks/index.html">
+<meta property="og:site_name" content="Stephen Ni&#39;s Blog">
+<meta property="og:description" content="近期Log4j2的安全漏洞影响了全世界Java技术生态的大部分软件系统，在之后的几天发布了若干个版本修复安全漏洞。公司内部的框架近期也在逐步升级，供各业务团队直接使用，在这个过程中顺便梳理了下Java日志框架生态。很多同学分不清楚Log4j，Logback，SLF4j，Log4j2等框架，对于相关的依赖包简直是一头雾水，本文结合之前的一些记录，完整梳理了当前流行的日志框架及推荐使用方式。">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://nisiyong.github.io/images/java-logging-frameworks/image-20220105223228662.png">
+<meta property="og:image" content="https://nisiyong.github.io/images/java-logging-frameworks/logging-framework.png">
+<meta property="article:published_time" content="2021-12-15T22:13:00.000Z">
+<meta property="article:modified_time" content="2026-02-21T14:49:09.134Z">
+<meta property="article:author" content="Stephen Ni">
+<meta property="article:tag" content="log">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://nisiyong.github.io/images/java-logging-frameworks/image-20220105223228662.png">
+
+
+<link rel="canonical" href="https://nisiyong.github.io/posts/java-logging-frameworks/">
+
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://nisiyong.github.io/posts/java-logging-frameworks/","path":"posts/java-logging-frameworks/","title":"Java日志框架生态"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>Java日志框架生态 | Stephen Ni's Blog</title>
+  
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-HZ9W81HNR8"></script>
+  <script class="next-config" data-name="google_analytics" type="application/json">{"tracking_id":"G-HZ9W81HNR8","only_pageview":false}</script>
+  <script src="/js/third-party/analytics/google-analytics.js"></script>
+
+
+
+
+
+
+
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+<link rel="alternate" href="/atom.xml" title="Stephen Ni's Blog" type="application/atom+xml">
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Stephen Ni's Blog</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>关于</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup"><div class="search-header">
+  <span class="search-icon">
+    <i class="fa fa-search"></i>
+  </span>
+  <div class="search-input-container">
+    <input autocomplete="off" autocapitalize="off" maxlength="80"
+           placeholder="搜索..." spellcheck="false"
+           type="search" class="search-input">
+  </div>
+  <span class="popup-btn-close" role="button">
+    <i class="fa fa-times-circle"></i>
+  </span>
+</div>
+<div class="search-result-container no-result">
+  <div class="search-result-icon">
+    <i class="fa fa-spinner fa-pulse fa-5x"></i>
+  </div>
+</div>
+
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#Java%E6%97%A5%E5%BF%97%E7%AE%80%E5%8F%B2"><span class="nav-number">1.</span> <span class="nav-text">Java日志简史</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%97%A5%E5%BF%97%E6%A1%86%E6%9E%B6%E8%AE%BE%E8%AE%A1"><span class="nav-number">2.</span> <span class="nav-text">日志框架设计</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%8E%A5%E5%8F%A3%E9%97%A8%E9%9D%A2"><span class="nav-number">2.1.</span> <span class="nav-text">接口门面</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%85%B7%E4%BD%93%E5%AE%9E%E7%8E%B0"><span class="nav-number">2.2.</span> <span class="nav-text">具体实现</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%97%A5%E5%BF%97%E9%80%82%E9%85%8D"><span class="nav-number">2.3.</span> <span class="nav-text">日志适配</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%97%A5%E5%BF%97%E6%A1%86%E6%9E%B6%E4%BE%9D%E8%B5%96"><span class="nav-number">3.</span> <span class="nav-text">日志框架依赖</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5"><span class="nav-number">4.</span> <span class="nav-text">最佳实践</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%80%BB%E7%BB%93"><span class="nav-number">5.</span> <span class="nav-text">总结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#References"><span class="nav-number">6.</span> <span class="nav-text">References</span></a></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Stephen Ni"
+      src="/uploads/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Stephen Ni</p>
+  <div class="site-description" itemprop="description">成长是克服天性的过程</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">13</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">2</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">16</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/nisiyong" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;nisiyong" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://twitter.com/nisiyong" title="Twitter → https:&#x2F;&#x2F;twitter.com&#x2F;nisiyong" rel="noopener me" target="_blank"><i class="fab fa-twitter fa-fw"></i>Twitter</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="/atom.xml" title="RSS → atom.xml" rel="noopener me"><i class="fa fa-rss fa-fw"></i>RSS</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://weibo.com/nisiyong" title="Weibo → https:&#x2F;&#x2F;weibo.com&#x2F;nisiyong" rel="noopener me" target="_blank"><i class="fab fa-weibo fa-fw"></i>Weibo</a>
+      </span>
+  </div>
+  <div class="cc-license animated" itemprop="license">
+    <a href="https://creativecommons.org/licenses/by-nc-nd/4.0/" class="cc-opacity" rel="noopener" target="_blank"><img src="https://cdnjs.cloudflare.com/ajax/libs/creativecommons-vocabulary/2020.11.3/assets/license_badges/small/by_nc_nd.svg" alt="Creative Commons"></a>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://nisiyong.github.io/posts/java-logging-frameworks/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/uploads/avatar.jpg">
+      <meta itemprop="name" content="Stephen Ni">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Stephen Ni's Blog">
+      <meta itemprop="description" content="成长是克服天性的过程">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="Java日志框架生态 | Stephen Ni's Blog">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Java日志框架生态
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2021-12-15 22:13:00" itemprop="dateCreated datePublished" datetime="2021-12-15T22:13:00+00:00">2021-12-15</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E6%8A%80%E6%9C%AF%E6%BC%AB%E8%B0%88/" itemprop="url" rel="index"><span itemprop="name">技术漫谈</span></a>
+        </span>
+    </span>
+
+  
+  
+  <span class="post-meta-item">
+    
+      <span class="post-meta-item-icon">
+        <i class="far fa-comment"></i>
+      </span>
+      <span class="post-meta-item-text">Disqus：</span>
+    
+    <a title="disqus" href="/posts/java-logging-frameworks/#disqus_thread" itemprop="discussionUrl">
+      <span class="post-comments-count disqus-comment-count" data-disqus-identifier="posts/java-logging-frameworks/" itemprop="commentCount"></span>
+    </a>
+  </span>
+  
+  
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+        <p>近期Log4j2的安全漏洞影响了全世界Java技术生态的大部分软件系统，在之后的几天发布了<a target="_blank" rel="noopener" href="https://logging.apache.org/log4j/2.x/changes-report.html">若干个版本</a>修复安全漏洞。公司内部的框架近期也在逐步升级，供各业务团队直接使用，在这个过程中顺便梳理了下Java日志框架生态。很多同学分不清楚Log4j，Logback，SLF4j，Log4j2等框架，对于相关的依赖包简直是一头雾水，本文结合之前的一些记录，完整梳理了当前流行的日志框架及推荐使用方式。</p>
+<span id="more"></span>
+
+<h2 id="Java日志简史"><a href="#Java日志简史" class="headerlink" title="Java日志简史"></a>Java日志简史</h2><table>
+<thead>
+<tr>
+<th>时间</th>
+<th>事件</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>2002年2月</td>
+<td>JDK1.4发布，新增java.util.logging默认日志实现</td>
+</tr>
+<tr>
+<td>2005年11月</td>
+<td>Log4j发布1.1.3版本</td>
+</tr>
+<tr>
+<td>2006年08月</td>
+<td>Logback发布0.2.5版本</td>
+</tr>
+<tr>
+<td>2006年12月</td>
+<td>SLF4J发布正式版1.1.0版本</td>
+</tr>
+<tr>
+<td>2011年7月</td>
+<td>JBoss Logging发布3.0.0.GA版本</td>
+</tr>
+<tr>
+<td>2014年7月</td>
+<td>Log4j发布2.0版本</td>
+</tr>
+<tr>
+<td>2017年09月</td>
+<td>JDK9发布，新增System.Logger类</td>
+</tr>
+</tbody></table>
+<p>统计时间 2021年12月，其中版本数据来源于<a target="_blank" rel="noopener" href="https://mvnrepository.com/">mvnrepository</a></p>
+<h2 id="日志框架设计"><a href="#日志框架设计" class="headerlink" title="日志框架设计"></a>日志框架设计</h2><p>不难想象，让进程输出自身内部状态的方法就是通过操作系统进程的标准输出与错误输出。为了更好的扩展日志的特性，如日志级别，分类存储，文件滚动等，在初期没有成熟的日志框架出现时大家纷纷各自实现，这在后续统一标准时带来了很多问题。接下来梳理当前Java生态的各类日志框架。</p>
+<h3 id="接口门面"><a href="#接口门面" class="headerlink" title="接口门面"></a>接口门面</h3><p>像SLF4j和Apache Commons Logging这类型属于日志门面，只定义了日志打印规范，相当于接口。其中Log4j2中的log4j-api也是这个作用，比较特别的是其定义了接口规范后，自己也做了相对应的实现，即log4j-core。</p>
+<p>门面的作用太重要了，这是<a target="_blank" rel="noopener" href="https://en.wikipedia.org/wiki/SOLID">SOLID</a>六大设计原则之一<a target="_blank" rel="noopener" href="https://en.wikipedia.org/wiki/Interface_segregation_principle">接口隔离</a>的典型代表。Java日志框架发展历史悠久，衍生了多种日志框架实现，有统一的日志框架接口，使得在应用在引用各类第三方依赖时不必纠结其使用了什么日志实现。</p>
+<p><strong>当前来看，SLF4J是接口门面的最好选择，大部分生态对对其进行了适配，选它就行了。</strong></p>
+<h3 id="具体实现"><a href="#具体实现" class="headerlink" title="具体实现"></a>具体实现</h3><p>接口有了就需要日志实现，Logback就是其中一个广泛使用的日志实现，它是与SLF4J同时期出现的产物，也来自于同一作者之手，目前也是Spring Boot生态默认的日志实现。</p>
+<p>2014年Log4j2诞生，成为了日志实现的又一选择，其最大的亮点是性能优势，Log4j2采用<a target="_blank" rel="noopener" href="https://lmax-exchange.github.io/disruptor/">LMAX Disruptor</a>无锁内存队列实现。下图是来自于官方的<a target="_blank" rel="noopener" href="https://logging.apache.org/log4j/2.x/performance.html">性能测试</a>的其中一张截图，在异步打印场景下其吞吐量特别高，吊打其他日志框架。为什么性能如此重要？在一些高QPS的服务，如果日志框架的性能不够强，会限制业务服务吞吐，还有可能影响业务应用，一个业务无关的日志记录器影响了业务服务稳定性，是非常不值得的。所以在后来，有很多Java应用开始尝试使用Log4j2作为其日志实现。</p>
+<p>除了Logback和Log4j2，还有想没有实现SLF4J的早期日志框架，如JDK内置的java.util.logging与Log4j，这些SLF4J额外做了一些适配包来适配，在下一部分会介绍到，不过不用太关注，因为不推荐这些作为日志实现。</p>
+<p><strong>尽管这次Log4j2安全漏洞席卷全球，但是如果再次选型日志实现，我还是推荐高性能的Log4j2。</strong></p>
+<p><img src="/images/java-logging-frameworks/image-20220105223228662.png" alt="image-20220105223228662"></p>
+<h3 id="日志适配"><a href="#日志适配" class="headerlink" title="日志适配"></a>日志适配</h3><p>当我们在开发应用时，会引用很多第三方组件，这些第三方组件来自不同的开发人员，他们使用不同的日志框架来打印日志。为了使得自己编写的代码中的日志打印与第三方组件的日志打印能够统一控制，我们可以选定某一种日志框架作为实现，而剩余的所有日志框架只需要在打印时适配转发路由到我们指定的日志框架就可以了。</p>
+<p><strong>简单来说，就是你选定某个日志框架后，剩余的其他日志框架适配工作就交给各个适配的依赖包来做就行了，你只需要选好正确的日志依赖即可。</strong>举个例子，比如你的项目确定使用Logback，而应用的一个X组件内部使用的是log4j，此时你可以考虑添加<code>log4j-over-slf4j</code>这个依赖包，让这个X组件用log4j打印的逻辑适配SLF4J，最终由Logback输出日志。</p>
+<h2 id="日志框架依赖"><a href="#日志框架依赖" class="headerlink" title="日志框架依赖"></a>日志框架依赖</h2><p>为了方便了解各个日志框架包之间的依赖关系，我梳理了一下这张图方便大家理解。</p>
+<ul>
+<li>图中红色字体的是日志门面的框架包，这类型的包在应用的classpath下无影响，其只是个接口。</li>
+<li>具体的日志实现包选择好其中一个就好，如图中四条红色的线对应了日志实现，建议选择Log4j2或Logback。</li>
+<li>其他的线就是一些日志适配包，选型日志实现后挑选一些需要的适配包依赖放到classpath下，做日志适配使用。</li>
+</ul>
+<p><img src="/images/java-logging-frameworks/logging-framework.png" alt="logging-framework"></p>
+<h2 id="最佳实践"><a href="#最佳实践" class="headerlink" title="最佳实践"></a>最佳实践</h2><p>日志框架不去了解清楚的话，确实会一头雾水，希望上文能帮助到你了解日志框架。这里罗列几个最佳实践：</p>
+<ul>
+<li>开发代码打印日志时，推荐使用SLF4J的api来打印日志，使得代码与具体的日志实现解耦</li>
+<li>开发SDK供他人使用时，不用传递依赖具体的日志实现，如log4j,logback,log4j-core等</li>
+<li>对于高性能场景，推荐使用SLF4J + Log4j2组合作为日志框架使用，并开启异步打印特性</li>
+<li>不要用多种日志实现，控制好日志适配包的使用避免循环依赖，使得启动时死循环导致栈溢出</li>
+<li>不要滥用日志打印，高频率打印日志落盘文件在日志归档压缩时会消耗cpu，影响业务系统运行</li>
+<li>不要滥用日志打印，在有日志收集的场景下，存储成本是昂贵的，只打印有价值的日志</li>
+<li>建议有统一的日志打印规范，可以参考下[Java开发手册](<a target="_blank" rel="noopener" href="https://g/">https://g</a> ithub.com&#x2F;alibaba&#x2F;p3c&#x2F;blob&#x2F;master&#x2F;Java开发手册（嵩山版）.pdf)日志规约部分，建立自己团队内部的使用规范</li>
+</ul>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>以上介绍了Java日志框架的生态，相关历史大家可以自行了解下。最主要还是梳理好日志框架之间的关系，在开发过程中用好日志框架，避免依赖混乱给自己挖坑，开发SDK时也避免给别人挖坑。这些只是开头，日志框架看似简单，在高吞吐的服务打印的每一行日志都要认真思考，要保障服务的稳定性，你必须认真对待每一个细节。</p>
+<h2 id="References"><a href="#References" class="headerlink" title="References"></a>References</h2><ul>
+<li><a target="_blank" rel="noopener" href="https://www.slf4j.org/">https://www.slf4j.org/</a></li>
+<li><a target="_blank" rel="noopener" href="https://logback.qos.ch/">https://logback.qos.ch/</a></li>
+<li><a target="_blank" rel="noopener" href="https://logging.apache.org/log4j/2.x/index.html">https://logging.apache.org/log4j/2.x/index.html</a></li>
+<li><a target="_blank" rel="noopener" href="https://en.wikipedia.org/wiki/SOLID">https://en.wikipedia.org/wiki/SOLID</a></li>
+<li><a target="_blank" rel="noopener" href="https://lmax-exchange.github.io/disruptor/">https://lmax-exchange.github.io/disruptor/</a></li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          
+
+<div class="post-copyright">
+<ul>
+  <li class="post-copyright-author">
+      <strong>本文作者： </strong>Stephen Ni
+  </li>
+  <li class="post-copyright-link">
+      <strong>本文链接：</strong>
+      <a href="https://nisiyong.github.io/posts/java-logging-frameworks/" title="Java日志框架生态">https://nisiyong.github.io/posts/java-logging-frameworks/</a>
+  </li>
+  <li class="post-copyright-license">
+      <strong>版权声明： </strong>本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-nd/4.0/" rel="noopener" target="_blank"><i class="fab fa-fw fa-creative-commons"></i>BY-NC-ND</a> 许可协议。转载请注明出处！
+  </li>
+</ul>
+</div>
+
+          <div class="post-tags">
+              <a href="/tags/log/" rel="tag"># log</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/posts/rocketmq-store-design/" rel="prev" title="RocketMQ存储设计剖析">
+                  <i class="fa fa-chevron-left"></i> RocketMQ存储设计剖析
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/posts/setup-kubernetes-cluster-in-rancher/" rel="next" title="使用Rancher快速搭建Kubernetes集群">
+                  使用Rancher快速搭建Kubernetes集群 <i class="fa fa-chevron-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+    
+  <div class="comments" id="disqus_thread">
+    <noscript>Please enable JavaScript to view the comments powered by Disqus.</noscript>
+  </div>
+  
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+
+<div class="copyright">
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Stephen Ni</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/" rel="noopener" target="_blank">NexT.Gemini</a> 强力驱动
+  </div>
+
+    </div>
+  </footer>
+
+  
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js" integrity="sha256-XL2inqUJaslATFnHdJOi9GfQ60on8Wx1C2H8DYiN1xY=" crossorigin="anonymous"></script>
+<script src="/js/comments.js"></script><script src="/js/utils.js"></script><script src="/js/motion.js"></script><script src="/js/next-boot.js"></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.4.1/search.js" integrity="sha256-1kfA5uHPf65M5cphT2dvymhkuyHPQp5A53EGZOnOLmc=" crossorigin="anonymous"></script>
+<script src="/js/third-party/search/local-search.js"></script>
+
+
+
+
+
+  
+
+
+
+
+<script class="next-config" data-name="disqus" type="application/json">{"enable":true,"shortname":"nisiyong","count":true,"i18n":{"disqus":"disqus"}}</script>
+<script src="/js/third-party/comments/disqus.js"></script>
+
+</body>
+</html>

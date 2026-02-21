@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222"><meta name="generator" content="Hexo 6.3.0">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha256-HtsXJanqjKTc8vVQjO4YMhiqFoXkfBsjBWcX91T1jr8=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"nisiyong.github.io","root":"/","images":"/images","scheme":"Gemini","darkmode":false,"version":"8.15.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12},"copycode":{"enable":false,"style":null},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"prism":false,"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.xml","localsearch":{"enable":true,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false}}</script><script src="/js/config.js"></script>
+
+    <meta name="description" content="在互联网架构演变的过程中，分布式唯一ID被广泛使用。常见的解决方法有UUID，基于数据库的方案等，本文重点来谈谈最最常用的一个方案——Snowflake算法。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="分布式唯一ID的方案与实现">
+<meta property="og:url" content="https://nisiyong.github.io/posts/distributed-id-design-and-implementation/index.html">
+<meta property="og:site_name" content="Stephen Ni&#39;s Blog">
+<meta property="og:description" content="在互联网架构演变的过程中，分布式唯一ID被广泛使用。常见的解决方法有UUID，基于数据库的方案等，本文重点来谈谈最最常用的一个方案——Snowflake算法。">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://nisiyong.github.io/images/distributed-id-design-and-implementation/006tNbRwgy1fwr56686koj30d3024dfo.jpg">
+<meta property="og:image" content="https://nisiyong.github.io/images/distributed-id-design-and-implementation/006tNbRwgy1fwypzo1r7lj30fl07j74i.jpg">
+<meta property="og:image" content="https://nisiyong.github.io/images/distributed-id-design-and-implementation/006tNbRwgy1fwypztmperj30d3029mx1.jpg">
+<meta property="og:image" content="https://nisiyong.github.io/images/distributed-id-design-and-implementation/006tNbRwgy1fwypzyc1o6j30b10jgjrl.jpg">
+<meta property="og:image" content="https://nisiyong.github.io/images/distributed-id-design-and-implementation/image-20210727140118039.png">
+<meta property="article:published_time" content="2018-11-06T22:36:07.000Z">
+<meta property="article:modified_time" content="2026-02-21T14:49:09.134Z">
+<meta property="article:author" content="Stephen Ni">
+<meta property="article:tag" content="distributed-system">
+<meta property="article:tag" content="snowflake">
+<meta property="article:tag" content="zookeeper">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://nisiyong.github.io/images/distributed-id-design-and-implementation/006tNbRwgy1fwr56686koj30d3024dfo.jpg">
+
+
+<link rel="canonical" href="https://nisiyong.github.io/posts/distributed-id-design-and-implementation/">
+
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://nisiyong.github.io/posts/distributed-id-design-and-implementation/","path":"posts/distributed-id-design-and-implementation/","title":"分布式唯一ID的方案与实现"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>分布式唯一ID的方案与实现 | Stephen Ni's Blog</title>
+  
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-HZ9W81HNR8"></script>
+  <script class="next-config" data-name="google_analytics" type="application/json">{"tracking_id":"G-HZ9W81HNR8","only_pageview":false}</script>
+  <script src="/js/third-party/analytics/google-analytics.js"></script>
+
+
+
+
+
+
+
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+<link rel="alternate" href="/atom.xml" title="Stephen Ni's Blog" type="application/atom+xml">
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Stephen Ni's Blog</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>关于</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup"><div class="search-header">
+  <span class="search-icon">
+    <i class="fa fa-search"></i>
+  </span>
+  <div class="search-input-container">
+    <input autocomplete="off" autocapitalize="off" maxlength="80"
+           placeholder="搜索..." spellcheck="false"
+           type="search" class="search-input">
+  </div>
+  <span class="popup-btn-close" role="button">
+    <i class="fa fa-times-circle"></i>
+  </span>
+</div>
+<div class="search-result-container no-result">
+  <div class="search-result-icon">
+    <i class="fa fa-spinner fa-pulse fa-5x"></i>
+  </div>
+</div>
+
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E4%BB%80%E4%B9%88%E6%98%AFSnowflake%E7%AE%97%E6%B3%95"><span class="nav-number">1.</span> <span class="nav-text">什么是Snowflake算法</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E9%83%A8%E7%BD%B2%E6%9E%B6%E6%9E%84"><span class="nav-number">2.</span> <span class="nav-text">部署架构</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E7%8B%AC%E7%AB%8B%E9%83%A8%E7%BD%B2%E5%9E%8B"><span class="nav-number">2.1.</span> <span class="nav-text">独立部署型</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%B5%8C%E5%85%A5%E9%83%A8%E7%BD%B2%E5%9E%8B"><span class="nav-number">2.2.</span> <span class="nav-text">嵌入部署型</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%AE%9E%E7%8E%B0%E6%96%B9%E6%A1%88"><span class="nav-number">3.</span> <span class="nav-text">实现方案</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%9C%BA%E5%99%A8ID%E8%87%AA%E5%8A%A8%E4%B8%8B%E5%8F%91"><span class="nav-number">3.1.</span> <span class="nav-text">机器ID自动下发</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E9%98%B2%E6%AD%A2%E6%97%B6%E9%92%9F%E5%9B%9E%E6%8B%A8"><span class="nav-number">3.2.</span> <span class="nav-text">防止时钟回拨</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5"><span class="nav-number">4.</span> <span class="nav-text">最佳实践</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%A4%9A%E9%9B%86%E7%BE%A4%E9%AB%98%E5%8F%AF%E7%94%A8"><span class="nav-number">4.1.</span> <span class="nav-text">多集群高可用</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%A5%87%E5%81%B6%E5%9D%87%E8%A1%A1%E4%BC%98%E5%8C%96"><span class="nav-number">4.2.</span> <span class="nav-text">奇偶均衡优化</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E9%98%B2%E6%AD%A2%E6%97%B6%E9%92%9F%E5%9B%9E%E6%8B%A8%E7%9A%84%E4%BC%98%E5%8C%96"><span class="nav-number">4.3.</span> <span class="nav-text">防止时钟回拨的优化</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%80%BB%E7%BB%93"><span class="nav-number">5.</span> <span class="nav-text">总结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%9B%B8%E5%85%B3%E9%93%BE%E6%8E%A5"><span class="nav-number">6.</span> <span class="nav-text">相关链接</span></a></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Stephen Ni"
+      src="/uploads/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Stephen Ni</p>
+  <div class="site-description" itemprop="description">成长是克服天性的过程</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">13</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">2</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">16</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/nisiyong" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;nisiyong" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://twitter.com/nisiyong" title="Twitter → https:&#x2F;&#x2F;twitter.com&#x2F;nisiyong" rel="noopener me" target="_blank"><i class="fab fa-twitter fa-fw"></i>Twitter</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="/atom.xml" title="RSS → atom.xml" rel="noopener me"><i class="fa fa-rss fa-fw"></i>RSS</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://weibo.com/nisiyong" title="Weibo → https:&#x2F;&#x2F;weibo.com&#x2F;nisiyong" rel="noopener me" target="_blank"><i class="fab fa-weibo fa-fw"></i>Weibo</a>
+      </span>
+  </div>
+  <div class="cc-license animated" itemprop="license">
+    <a href="https://creativecommons.org/licenses/by-nc-nd/4.0/" class="cc-opacity" rel="noopener" target="_blank"><img src="https://cdnjs.cloudflare.com/ajax/libs/creativecommons-vocabulary/2020.11.3/assets/license_badges/small/by_nc_nd.svg" alt="Creative Commons"></a>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://nisiyong.github.io/posts/distributed-id-design-and-implementation/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/uploads/avatar.jpg">
+      <meta itemprop="name" content="Stephen Ni">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Stephen Ni's Blog">
+      <meta itemprop="description" content="成长是克服天性的过程">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="分布式唯一ID的方案与实现 | Stephen Ni's Blog">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          分布式唯一ID的方案与实现
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2018-11-06 22:36:07" itemprop="dateCreated datePublished" datetime="2018-11-06T22:36:07+00:00">2018-11-06</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E6%8A%80%E6%9C%AF%E6%BC%AB%E8%B0%88/" itemprop="url" rel="index"><span itemprop="name">技术漫谈</span></a>
+        </span>
+    </span>
+
+  
+  
+  <span class="post-meta-item">
+    
+      <span class="post-meta-item-icon">
+        <i class="far fa-comment"></i>
+      </span>
+      <span class="post-meta-item-text">Disqus：</span>
+    
+    <a title="disqus" href="/posts/distributed-id-design-and-implementation/#disqus_thread" itemprop="discussionUrl">
+      <span class="post-comments-count disqus-comment-count" data-disqus-identifier="posts/distributed-id-design-and-implementation/" itemprop="commentCount"></span>
+    </a>
+  </span>
+  
+  
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+        <p>在互联网架构演变的过程中，分布式唯一ID被广泛使用。常见的解决方法有UUID，基于数据库的方案等，本文重点来谈谈最最常用的一个方案——Snowflake算法。</p>
+<span id="more"></span>
+
+<h2 id="什么是Snowflake算法"><a href="#什么是Snowflake算法" class="headerlink" title="什么是Snowflake算法"></a>什么是Snowflake算法</h2><p>Snowflake是一种可以大规模生成唯一ID的算法，它基于某些规则来保证。</p>
+<p>2011年Twitter公司在迁移MySQL数据到Cassandra时，需要一种新的方式来生成ID，因为Cassandra没有提供相应的唯一ID生成算法，所以诞生了Snowflake算法。</p>
+<p>Snowflake生成的ID是一个64bit的long类型，由以下3个部分组成：</p>
+<ul>
+<li>41位时间（存毫秒值，可以自定义起始时间，可使用69年）</li>
+<li>10机器码，最大允许1024台机器（实际使用0-255，共256台）</li>
+<li>12位序列号，每台机器每一毫秒最多可产生4096个序列号</li>
+</ul>
+<p><img src="/images/distributed-id-design-and-implementation/006tNbRwgy1fwr56686koj30d3024dfo.jpg" alt="006tNbRwgy1fwr56686koj30d3024dfo"></p>
+<p>除去第1位符号位，剩余63位可以保证1024台不同的机器每毫秒可产生4096不同的ID。换句话说，就是理论上每台机器每秒可产生409.6w个不同的ID，且最多可部署1024台机器。</p>
+<p><strong>强依赖系统时钟</strong></p>
+<p>Snowflake算法唯一不好的就是强依赖系统时钟，一旦系统时钟回拨了，那么就有可能产生重复的ID，这是不可以接受的，所以我们要想办法避免时钟回拨，或时钟回拨时要有告警，并停止生成ID。</p>
+<h2 id="部署架构"><a href="#部署架构" class="headerlink" title="部署架构"></a>部署架构</h2><p>在微服务架构的影响下，对分布式唯一ID的落地，我总结了两种部署架构，并讨论起利弊。</p>
+<h3 id="独立部署型"><a href="#独立部署型" class="headerlink" title="独立部署型"></a>独立部署型</h3><p><img src="/images/distributed-id-design-and-implementation/006tNbRwgy1fwypzo1r7lj30fl07j74i.jpg" alt="006tNbRwgy1fwypzo1r7lj30fl07j74i"></p>
+<p>如上图，把id生成单独做成一个服务，对外提供接口调用，如订单服务order-service需要一个唯一ID时就发起一次调用，库存服务stock-service也是同样。由id-service内部保证唯一。</p>
+<p><strong>优点</strong></p>
+<ul>
+<li>id全局唯一。所有应用系统的id都不会重复</li>
+</ul>
+<p><strong>缺点</strong></p>
+<ul>
+<li>性能差，获取id时需要发起调用。就算做成批量获取，还是需要网络消耗</li>
+<li>强依赖，对id-service要求极高，一旦出问题，业务系统全部不可用</li>
+</ul>
+<h3 id="嵌入部署型"><a href="#嵌入部署型" class="headerlink" title="嵌入部署型"></a>嵌入部署型</h3><p><img src="/images/distributed-id-design-and-implementation/006tNbRwgy1fwypztmperj30d3029mx1.jpg" alt="006tNbRwgy1fwypztmperj30d3029mx1"></p>
+<p>如上图，嵌入部署的话，意思是把id-service的逻辑做成工具类，直接跟着应用系统的集群一起部署，每次获取id无需走网络调用，直接本地调用工具类生成即可。</p>
+<p><strong>优点</strong></p>
+<ul>
+<li>性能好，直接本地工具调用，内存直接获取</li>
+<li>弱依赖，应用之间互相独立，互不影响</li>
+</ul>
+<p><strong>缺点</strong></p>
+<ul>
+<li>id应用唯一。只能保证同个应用下id唯一，跨应用id有可能是相同的</li>
+</ul>
+<h2 id="实现方案"><a href="#实现方案" class="headerlink" title="实现方案"></a>实现方案</h2><p>具体实现主要关注两个问题：<code>机器ID自动下发</code>及<code>防止时钟回拨</code>。</p>
+<h3 id="机器ID自动下发"><a href="#机器ID自动下发" class="headerlink" title="机器ID自动下发"></a>机器ID自动下发</h3><p>关于机器ID下发的具体实现，我们可以利用zookeeper的特性来实现。我们以应用为维度，每个应用都注册到<code>/snowflake</code>目录下，每个应用下有两个目录，<code>servers</code>目录以及<code>instances</code>目录。<code>servers</code>目录下的节点均为<code>持久化节点</code>，<code>instances</code>目录下的节点均为<code>临时节点</code>。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">/snowflake</span><br><span class="line">	/app-name</span><br><span class="line">		/servers</span><br><span class="line">			/10.20.30.40:8888_0</span><br><span class="line">			/10.20.30.41:8888_1</span><br><span class="line">			/10.20.30.42:8888_2</span><br><span class="line">			...</span><br><span class="line">		/instances</span><br><span class="line">			/0</span><br><span class="line">			/1</span><br><span class="line">			/2</span><br><span class="line">			...</span><br><span class="line">			/255</span><br></pre></td></tr></table></figure>
+
+<p>下面流程展示了服务启动时获取机器ID的流程：</p>
+<p><img src="/images/distributed-id-design-and-implementation/006tNbRwgy1fwypzyc1o6j30b10jgjrl.jpg" alt="006tNbRwgy1fwypzyc1o6j30b10jgjrl"></p>
+<ol>
+<li>首先应用启动，得到自身应用相关信息，如应用名称，IP地址及端口等</li>
+<li>根据应用名称在对应的<code>servers</code>目录下，查找是否有匹配自身IP及端口的节点</li>
+<li>如果有跳到步骤4，没有则在<code>servers</code>下所有子节点中，从0～255中选出未被使用最小的机器ID</li>
+<li>获取到机器ID去<code>instances</code>目录下创建临时节点</li>
+<li>如果创建成功，则保存配置到<code>servers</code>中，并启动成功；如果创建失败，则判断重试次数，跳回步骤2或启动失败。</li>
+</ol>
+<blockquote>
+<p>为什么要这么做？用0～255的随机数去instances抢占也可以，为何还要保存配置到servers目录下？</p>
+<p>这么做的原因主要是尽可能地保证机器ID稳定，不变化。好处是可以缓存这个稳定的机器ID到本地磁盘文件，在zk不可用时，直接读取本地磁盘文件记录的机器ID启动，弱化了对zookeeper的依赖。</p>
+</blockquote>
+<h3 id="防止时钟回拨"><a href="#防止时钟回拨" class="headerlink" title="防止时钟回拨"></a>防止时钟回拨</h3><p>关于机器回拨的问题，可以分两种情况：<code>运行时回拨</code>和<code>启动时回拨</code>。</p>
+<p><strong>运行时回拨</strong></p>
+<p>这种情况可以在启动后每次生成id时在内存中用变量记录上一次的时间，一旦回拨可以及时发现，如回拨几毫秒可以选择等待，如过大范围回拨则抛异常，服务不可用。</p>
+<p><strong>启动时回拨</strong></p>
+<p>在进程启动时时钟已经发生回拨，这是用内存变量来记录上一次的时间以及没有多大作用了。这时本服务器的时钟已不可信，应该通过网络访问外部的时钟来判断。如开启NTP同步，基本可避免启动时已经发生回拨；美团的leaf-snowflake则是通过rpc的方式访问其他服务的系统时间做平均值来参考。只要启动时发现时钟回拨，则启动失败。</p>
+<h2 id="最佳实践"><a href="#最佳实践" class="headerlink" title="最佳实践"></a>最佳实践</h2><h3 id="多集群高可用"><a href="#多集群高可用" class="headerlink" title="多集群高可用"></a>多集群高可用</h3><p>预留机器码高2位作为集群表示位，即可以支持4个集群。</p>
+<p><img src="/images/distributed-id-design-and-implementation/image-20210727140118039.png" alt="image-20210727140118039"></p>
+<h3 id="奇偶均衡优化"><a href="#奇偶均衡优化" class="headerlink" title="奇偶均衡优化"></a>奇偶均衡优化</h3><p>由于在并发场景较低的场景下，同一毫秒下基本只生成一个ID，此时默认的序列号为0，这会导致雪花ID为偶数的概率非常大。</p>
+<p>为了使得ID的奇偶性均衡，我们在每次生成ID时，根据时间毫秒值除2取模作为序列号的起始位。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (timestamp == lastTimestamp) &#123;</span><br><span class="line">  sequence = (sequence + <span class="number">1L</span>) &amp; sequenceMask;</span><br><span class="line">  <span class="keyword">if</span> (sequence == <span class="number">0</span>) &#123;</span><br><span class="line">    timestamp = tilNextMillis(lastTimestamp);</span><br><span class="line">  &#125;</span><br><span class="line">&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">  <span class="comment">// sequence begin with 0 or 1 in every millis</span></span><br><span class="line">  sequence = lastTimestamp &amp; <span class="number">1L</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="防止时钟回拨的优化"><a href="#防止时钟回拨的优化" class="headerlink" title="防止时钟回拨的优化"></a>防止时钟回拨的优化</h3><p>上述时钟回拨的处理方式比较粗暴，对业务非常不友好，所以需要进一步做优化：</p>
+<ol>
+<li>每次生成ID是判断时钟是否回拨，如果回拨了毫秒值保持不变</li>
+<li>毫秒值不变会导致序列号自增，类似并发场景</li>
+<li>序列号位自增满后，毫秒数加1，同时重置序列号位</li>
+</ol>
+<p>目前启动时回拨在功能实现上有一定的复杂性和成本，暂无实现。需要依赖服务器的NTP同步，所以使用雪花算法的服务器建议都开启NTP同步并做好监控。</p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>本文是在工作中重构原有类snowflake算法使用不当情况下，做了一些探究并做了新版的实现。参考了一些现有的开源项目，和一些文章。如Twitter最早的官方材料，百度的uid-generator，美团的Leaf文章，以及微信的seqsvr等。</p>
+<p>根据业务情况，采用了嵌入部署型的snowflake，借鉴了美团leaf-snowflake的一些实践，并用本文所介绍的zookeeper自动下发机器ID的方案实现了分布式唯一ID生成的功能。</p>
+<h2 id="相关链接"><a href="#相关链接" class="headerlink" title="相关链接"></a>相关链接</h2><ul>
+<li><p><a target="_blank" rel="noopener" href="https://tech.meituan.com/MT_Leaf.html">https://tech.meituan.com/MT_Leaf.html</a></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://github.com/twitter-archive/snowflake">https://github.com/twitter-archive/snowflake</a></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://github.com/baidu/uid-generator">https://github.com/baidu/uid-generator</a></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://github.com/nebula-im/seqsvr">https://github.com/nebula-im/seqsvr</a></p>
+</li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          
+
+<div class="post-copyright">
+<ul>
+  <li class="post-copyright-author">
+      <strong>本文作者： </strong>Stephen Ni
+  </li>
+  <li class="post-copyright-link">
+      <strong>本文链接：</strong>
+      <a href="https://nisiyong.github.io/posts/distributed-id-design-and-implementation/" title="分布式唯一ID的方案与实现">https://nisiyong.github.io/posts/distributed-id-design-and-implementation/</a>
+  </li>
+  <li class="post-copyright-license">
+      <strong>版权声明： </strong>本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-nd/4.0/" rel="noopener" target="_blank"><i class="fab fa-fw fa-creative-commons"></i>BY-NC-ND</a> 许可协议。转载请注明出处！
+  </li>
+</ul>
+</div>
+
+          <div class="post-tags">
+              <a href="/tags/distributed-system/" rel="tag"># distributed-system</a>
+              <a href="/tags/snowflake/" rel="tag"># snowflake</a>
+              <a href="/tags/zookeeper/" rel="tag"># zookeeper</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/posts/dubbo-load-balance-round-robin/" rel="prev" title="Dubbo负载均衡之加权轮训">
+                  <i class="fa fa-chevron-left"></i> Dubbo负载均衡之加权轮训
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/posts/framework-branch-model/" rel="next" title="框架类版本管理分支规范">
+                  框架类版本管理分支规范 <i class="fa fa-chevron-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+    
+  <div class="comments" id="disqus_thread">
+    <noscript>Please enable JavaScript to view the comments powered by Disqus.</noscript>
+  </div>
+  
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+
+<div class="copyright">
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Stephen Ni</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/" rel="noopener" target="_blank">NexT.Gemini</a> 强力驱动
+  </div>
+
+    </div>
+  </footer>
+
+  
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js" integrity="sha256-XL2inqUJaslATFnHdJOi9GfQ60on8Wx1C2H8DYiN1xY=" crossorigin="anonymous"></script>
+<script src="/js/comments.js"></script><script src="/js/utils.js"></script><script src="/js/motion.js"></script><script src="/js/next-boot.js"></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.4.1/search.js" integrity="sha256-1kfA5uHPf65M5cphT2dvymhkuyHPQp5A53EGZOnOLmc=" crossorigin="anonymous"></script>
+<script src="/js/third-party/search/local-search.js"></script>
+
+
+
+
+
+  
+
+
+
+
+<script class="next-config" data-name="disqus" type="application/json">{"enable":true,"shortname":"nisiyong","count":true,"i18n":{"disqus":"disqus"}}</script>
+<script src="/js/third-party/comments/disqus.js"></script>
+
+</body>
+</html>

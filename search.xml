@@ -1,0 +1,1189 @@
+<?xml version="1.0" encoding="utf-8"?>
+<search>
+  <entry>
+    <title>ChatGPT与私有数据整合原理</title>
+    <url>/posts/chatgpt-integate-external-data/</url>
+    <content><![CDATA[<p>ChatGPT 的出现惊艳了世界，它通过了图灵测试，让人们分不清回答问题的是人还是机器。大家不甘于只在官方的对话页面问答，想利用 GPT 模型的自然语言能力结合私有数据做更多的应用场景，解决模型训练的数据不是实时的问题，同时也解决 OpenAI API tokens 限制的的问题。本文先来分析下这些基本问题如何解决，理解了这个基本原理，就能了解到 ChatGPT 衍生的很多产品，甚至去打造适合自己场景的应用。</p>
+<span id="more"></span>
+
+<h2 id="Token-限制"><a href="#Token-限制" class="headerlink" title="Token 限制"></a>Token 限制</h2><p>OpenAI 提供了 OpenAPI 供第三方调用，但是无论你调用什么接口，每个模型都有对应的 token 数量限制，这意味着你不可能传输大量的数据。比如最新的 <a href="https://platform.openai.com/docs/models/gpt-4">gpt-4</a> 模型限制了 8,192 tokens，如果你想要提供大量的上下文信息后，这在单次的接口处理上是不可能的事情。</p>
+<p>这里可以通过 <a href="https://platform.openai.com/tokenizer">Tokenizer</a> 来计算你的文本对应的 token 数量，一般少量的 context 还是可以接受的，但是大量的 context 我们就得考虑接下来介绍的方法。</p>
+<h2 id="Embeddings-模型"><a href="#Embeddings-模型" class="headerlink" title="Embeddings 模型"></a>Embeddings 模型</h2><p>OpenAI 提供的不仅仅是用于文本填充或问答的功能的 <strong>GPT</strong> 模型，还有其他许多模型。比如 <a href="https://platform.openai.com/docs/models/dall-e"><strong>DALL·E</strong></a> 模型可以根据文字生成图片，<a href="https://platform.openai.com/docs/models/whisper"><strong>Whisper</strong></a> 模型可以通过声音转换文本，<a href="https://platform.openai.com/docs/models/moderation"><strong>Moderation</strong></a> 可以通过文本内容识别是否涉及暴力等有害内容，还有一个 <a href="https://platform.openai.com/docs/guides/embeddings/"><strong>Embeddings</strong></a> 模型可以用于计算文本的关联性。</p>
+<p>那 Embeddings 模型计算文本的关联性可以用于什么场景呢？官方文档举了几个场景：</p>
+<ul>
+<li><strong>搜索</strong>（结果按查询字符串相关性排序）</li>
+<li><strong>聚类</strong>（按相似性分组文本字符串）</li>
+<li><strong>推荐</strong>（推荐具有相关文本字符串的项目）</li>
+<li><strong>异常检测</strong>（识别相关性较小的离群值）</li>
+<li><strong>多样性测量</strong>（分析相似性分布）</li>
+<li><strong>分类</strong>（按最相似的标签对文本字符串进行分类）</li>
+</ul>
+<p>接下来我们通过接口请求来看看这个模型是怎么使用的，首先我们把文本数据放到 <code>input</code> 字段里，这个字段也有 token 限制，如果是大文本还需要做些预处理切割。</p>
+<figure class="highlight bash"><table><tr><td class="code"><pre><span class="line">curl https://api.openai.com/v1/embeddings \</span><br><span class="line">  -H <span class="string">&quot;Content-Type: application/json&quot;</span> \</span><br><span class="line">  -H <span class="string">&quot;Authorization: Bearer <span class="variable">$OPENAI_API_KEY</span>&quot;</span> \</span><br><span class="line">  -d <span class="string">&#x27;&#123;</span></span><br><span class="line"><span class="string">    &quot;input&quot;: &quot;Your text string goes here&quot;,</span></span><br><span class="line"><span class="string">    &quot;model&quot;: &quot;text-embedding-ada-002&quot;</span></span><br><span class="line"><span class="string">  &#125;&#x27;</span></span><br></pre></td></tr></table></figure>
+
+<p>传入的文本后调用接口的响应内容里 <code>data.embedding</code> 就是我们要的数据，可以看出来这是一个浮点型数组，目前这个数组有 <code>1536</code> 个元素，这其实就是原始文本内容对应的向量。</p>
+<figure class="highlight json"><table><tr><td class="code"><pre><span class="line"><span class="punctuation">&#123;</span></span><br><span class="line">  <span class="attr">&quot;data&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span></span><br><span class="line">    <span class="punctuation">&#123;</span></span><br><span class="line">      <span class="attr">&quot;embedding&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span></span><br><span class="line">        <span class="number">-0.006929283495992422</span><span class="punctuation">,</span></span><br><span class="line">        <span class="number">-0.005336422007530928</span><span class="punctuation">,</span></span><br><span class="line">        ...</span><br><span class="line">        <span class="number">-4.547132266452536e-05</span><span class="punctuation">,</span></span><br><span class="line">        <span class="number">-0.024047505110502243</span></span><br><span class="line">      <span class="punctuation">]</span><span class="punctuation">,</span></span><br><span class="line">      <span class="attr">&quot;index&quot;</span><span class="punctuation">:</span> <span class="number">0</span><span class="punctuation">,</span></span><br><span class="line">      <span class="attr">&quot;object&quot;</span><span class="punctuation">:</span> <span class="string">&quot;embedding&quot;</span></span><br><span class="line">    <span class="punctuation">&#125;</span></span><br><span class="line">  <span class="punctuation">]</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;model&quot;</span><span class="punctuation">:</span> <span class="string">&quot;text-embedding-ada-002&quot;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;object&quot;</span><span class="punctuation">:</span> <span class="string">&quot;list&quot;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;usage&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span><br><span class="line">    <span class="attr">&quot;prompt_tokens&quot;</span><span class="punctuation">:</span> <span class="number">5</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;total_tokens&quot;</span><span class="punctuation">:</span> <span class="number">5</span></span><br><span class="line">  <span class="punctuation">&#125;</span></span><br><span class="line"><span class="punctuation">&#125;</span></span><br></pre></td></tr></table></figure>
+
+<h2 id="向量相似性与数据库"><a href="#向量相似性与数据库" class="headerlink" title="向量相似性与数据库"></a>向量相似性与数据库</h2><p>原始文本被拆分成多个片段后，通过 Embeddings 模型生成对应的数字向量，我们需要提问的问题也可以生成向量，这样就可以找到问题与多个原始文本片段的相似性，再做个 rank，可以获得与这个问题相关度最高的文本片段。</p>
+<p>通过向量如何计算相似度呢？这里可以利用数学里的 <a href="https://zh.wikipedia.org/wiki/%E4%BD%99%E5%BC%A6%E7%9B%B8%E4%BC%BC%E6%80%A7">余弦相似性</a> 来计算，想象一下在二维空间里，两个向量的夹角越小，这两个向量的方向就越一致，也即相关度会越高。可以利用以下公式计算。</p>
+<p><img src="/images/chatgpt-integate-external-data/image-20230328215424237.png" alt="image-20230328215424237"></p>
+<p><img src="/images/chatgpt-integate-external-data/image-20230328215432492.png" alt="image-20230328215432492"></p>
+<p>但是在上面获取的向量并不是一个二维的向量，而是拥有 1536 个数据的向量，这个时候计算会复杂一点，当然我们可以不用自己计算，直接利用向量数据库即可。所以通过 Embedings 模型获取到的结果用常规的关系数据库如 MySQL 存储在计算时并不方便，需要专门的向量数据库。</p>
+<p>目前比较知名 vector database 的有：</p>
+<ul>
+<li><a href="https://www.pinecone.io/">Pinecone</a>，这个提供 Google Cloud 或 AWS 的托管服务</li>
+<li><a href="https://qdrant.tech/">Qdrant</a>，开源版及商业版都有</li>
+<li><a href="https://github.com/pgvector/pgvector">pgvector</a>，PostgreSQL 的扩展</li>
+<li>…</li>
+</ul>
+<p>其余的不太熟悉不一一列举，大家可以自行搜索 <code>vector database</code> 找到合适的向量数据库。利用好向量数据库存好 vector 和 payload，再利用好其查询接口就能获取相似度最高的 vector 和 payload。</p>
+<h2 id="私有数据整合"><a href="#私有数据整合" class="headerlink" title="私有数据整合"></a>私有数据整合</h2><p>通过上述的操作，我们已经可以把流程串起来了，下图是网友整合的一张交互流程图，这里做下简单的说明：</p>
+<ol>
+<li>首先对原始文本内容进行切割，保证不超过 Embeddings 模型的 tokens 限制，拆分成多个 chunk</li>
+<li>逐一对 chunk 调用 Embeddings 模型后获取对应的 vector 向量后，存储本地的向量数据库，关键的数据主要是 vector 值即 chunk 内容</li>
+<li>根据用户问题调用 Embeddings 模型后获取该问题的 vector，在本地向量数据库进行查询，可以获取相似度 TopN 的 chunks</li>
+<li>把 TopN 的 chucks 作为 chat 接口的 context，再加上用户问题作为 Prompt，通过 GPT 模型获取相应的结果</li>
+</ol>
+<p><img src="/images/chatgpt-integate-external-data/image-20230328215444897.png" alt="image-20230328215444897"></p>
+<p>这里再补充说明下为什么通过这种方式能够做到整合的效果，核心的原理就是先利用问题在本地找到相关性最高的数据，然后再把数据放到 GPT 的 context 里，这个时候虽然模型是 2021 年训练的数据，却可以结合你上下文中你提供的资料来做问题的解答。相当于我们其实是通过 Embeddings 模型来过滤出跟这个问题相关的材料，再让 GPT 结合这些材料用自然语言表达出来。</p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>本文主要讲述了如何基于 OpenAI 的 GPT 模型，绕过 tokens 限制从而整合私有化数据，通过此功能可以衍生出大量的应用，比如可以打造个人知识库问答，让 GPT 总结一本新书的内容，还有很多结合场景，后续可以介绍。上述的方案目前也无需自行实现，已经有相应的开源 LLM 框架做了封装，比如 <a href="https://python.langchain.com/">LangChain</a>，<a href="https://gpt-index.readthedocs.io/">LlamaIndex</a> 等，还有 OpenAI 新发布的 Chat Plugins 功能也是非常强大，后续可以介绍下。</p>
+<h2 id="References"><a href="#References" class="headerlink" title="References"></a>References</h2><ul>
+<li><a href="https://blog.langchain.dev/tutorial-chatgpt-over-your-data/">https://blog.langchain.dev/tutorial-chatgpt-over-your-data/</a></li>
+<li><a href="https://en.wikipedia.org/wiki/Cosine_similarity">https://en.wikipedia.org/wiki/Cosine_similarity</a></li>
+<li><a href="https://qdrant.tech/documentation/search/">https://qdrant.tech/documentation/search/</a></li>
+<li><a href="https://twitter-thread.com/t/1631779232455053313">https://twitter-thread.com/t/1631779232455053313</a></li>
+</ul>
+]]></content>
+      <categories>
+        <category>技术漫谈</category>
+      </categories>
+      <tags>
+        <tag>chatgpt</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>使用 kubectl 连接 Google Cloud GKE</title>
+    <url>/posts/connect-gke-cluster-with-kubectl/</url>
+    <content><![CDATA[<p>为了方便快速熟悉 Kubernetes 相关功能特性，拥有一个私人的 Kubernetes 集群是非常方便的。一般在会推荐在本地使用 <a href="https://github.com/kubernetes/minikube">minikube</a>，我也尝试过多次，不过还是有点委屈我的 16GB 的 Macbook Pro。年前在考 CKAD 时用 Google Cloud 免费的 300 刀直接创建了 GKE，本地 kubectl 直接连接使用非常方便。由于官方文档比较多，为了方便，当时记录了连接 GKE 的相关步骤及资料，希望对相关同学有所帮助。</p>
+<span id="more"></span>
+
+<h2 id="1）安装-gcloud"><a href="#1）安装-gcloud" class="headerlink" title="1）安装 gcloud"></a>1）安装 gcloud</h2><figure class="highlight bash"><table><tr><td class="code"><pre><span class="line"><span class="built_in">cd</span> /tmp</span><br><span class="line">wget [&lt;https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-413.0.0-darwin-x86_64.tar.gz&gt;](&lt;https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-413.0.0-darwin-x86_64.tar.gz&gt;)	</span><br><span class="line">tar zxvf google-cloud-cli-413.0.0-darwin-x86_64.tar.gz -C ~/opt</span><br><span class="line">~/opt/google-cloud-sdk/install.sh</span><br><span class="line">~/opt/google-cloud-sdk/bin/gcloud init</span><br></pre></td></tr></table></figure>
+
+<h2 id="2）安装-gke-gcloud-auth-plugin"><a href="#2）安装-gke-gcloud-auth-plugin" class="headerlink" title="2）安装 gke-gcloud-auth-plugin"></a>2）安装 gke-gcloud-auth-plugin</h2><figure class="highlight bash"><table><tr><td class="code"><pre><span class="line">~ gcloud container clusters get-credentials cluster-1 --zone us-central1-c --project my-project</span><br><span class="line">Fetching cluster endpoint and auth data.</span><br><span class="line">CRITICAL: ACTION REQUIRED: gke-gcloud-auth-plugin, <span class="built_in">which</span> is needed <span class="keyword">for</span> continued use of kubectl, was not found or is not executable. Install gke-gcloud-auth-plugin <span class="keyword">for</span> use with kubectl by following &lt;https://cloud.google.com/blog/products/containers-kubernetes/kubectl-auth-changes-in-gke&gt;</span><br><span class="line">kubeconfig entry generated <span class="keyword">for</span> cluster-1.</span><br><span class="line">➜  ~ gcloud components install gke-gcloud-auth-plugin</span><br><span class="line"></span><br><span class="line">Your current Google Cloud CLI version is: 413.0.0</span><br><span class="line">Installing components from version: 413.0.0</span><br><span class="line"></span><br><span class="line">┌────────────────────────────────────────────┐</span><br><span class="line">│    These components will be installed.     │</span><br><span class="line">├────────────────────────┬─────────┬─────────┤</span><br><span class="line">│          Name          │ Version │   Size  │</span><br><span class="line">├────────────────────────┼─────────┼─────────┤</span><br><span class="line">│ gke-gcloud-auth-plugin │   0.4.0 │ 7.5 MiB │</span><br><span class="line">└────────────────────────┴─────────┴─────────┘</span><br><span class="line"></span><br><span class="line">For the latest full release notes, please visit:</span><br><span class="line">  &lt;https://cloud.google.com/sdk/release_notes&gt;</span><br><span class="line"></span><br><span class="line">Do you want to <span class="built_in">continue</span> (Y/n)?  Y</span><br><span class="line"></span><br><span class="line">╔════════════════════════════════════════════════════════════╗</span><br><span class="line">╠═ Creating update staging area                             ═╣</span><br><span class="line">╠════════════════════════════════════════════════════════════╣</span><br><span class="line">╠═ Installing: gke-gcloud-auth-plugin                       ═╣</span><br><span class="line">╠════════════════════════════════════════════════════════════╣</span><br><span class="line">╠═ Installing: gke-gcloud-auth-plugin                       ═╣</span><br><span class="line">╠════════════════════════════════════════════════════════════╣</span><br><span class="line">╠═ Creating backup and activating new installation          ═╣</span><br><span class="line">╚════════════════════════════════════════════════════════════╝</span><br><span class="line"></span><br><span class="line">Performing post processing steps...done.</span><br><span class="line"></span><br><span class="line">Update <span class="keyword">done</span>!</span><br></pre></td></tr></table></figure>
+
+<h2 id="3）配置-kubectl"><a href="#3）配置-kubectl" class="headerlink" title="3）配置 kubectl"></a>3）配置 kubectl</h2><p><img src="/images/connect-gke-cluster-with-kubectl/gke.png"></p>
+<figure class="highlight bash"><table><tr><td class="code"><pre><span class="line">➜  ~ gcloud container clusters get-credentials cluster-1 --zone us-central1-c --project hip-watch-373203</span><br><span class="line">Fetching cluster endpoint and auth data.</span><br><span class="line">kubeconfig entry generated <span class="keyword">for</span> cluster-1.</span><br><span class="line">➜  ~</span><br></pre></td></tr></table></figure>
+
+<h2 id="4）验证-kubectl-连接-GKE"><a href="#4）验证-kubectl-连接-GKE" class="headerlink" title="4）验证 kubectl 连接 GKE"></a>4）验证 kubectl 连接 GKE</h2><p>这里推荐下 <a href="https://github.com/ahmetb/kubectx">kubectx</a>，对于多个 Kubernetes 集群切换非常方便，完成以上步骤操作后就能看到你的 GKE 集群了。</p>
+<figure class="highlight bash"><table><tr><td class="code"><pre><span class="line">➜  ~ kubectx</span><br><span class="line">gke_my-project_us-central1-c_cluster-1</span><br><span class="line">➜  ~</span><br></pre></td></tr></table></figure>
+
+<p>再推荐下 <a href="https://github.com/ohmyzsh/ohmyzsh/tree/master/plugins/kubectl">ohmyzsh kubectl plugin</a>，简化了很多 Kubernetes 命令行指令。以下命令查看当前集群 node 节点：</p>
+<figure class="highlight bash"><table><tr><td class="code"><pre><span class="line">➜  ~ kgno</span><br><span class="line">NAME                                       STATUS   ROLES    AGE     VERSION</span><br><span class="line">gke-cluster-1-default-pool-f4635b04-2rr7   Ready    &lt;none&gt;   9m53s   v1.25.4-gke.2100</span><br><span class="line">gke-cluster-1-default-pool-f4635b04-36lq   Ready    &lt;none&gt;   9m53s   v1.25.4-gke.2100</span><br><span class="line">gke-cluster-1-default-pool-f4635b04-jzx5   Ready    &lt;none&gt;   9m53s   v1.25.4-gke.2100</span><br><span class="line">➜  ~</span><br></pre></td></tr></table></figure>
+
+<p>运行一个 nginx pod，也可以查看已经可以正常使用。</p>
+<figure class="highlight bash"><table><tr><td class="code"><pre><span class="line">➜  ~ k run nginx --image=nginx</span><br><span class="line">pod/nginx created</span><br><span class="line">➜  ~</span><br><span class="line">➜  ~ kgp</span><br><span class="line">NAME    READY   STATUS    RESTARTS   AGE</span><br><span class="line">nginx   1/1     Running   0          6s</span><br><span class="line">➜  ~</span><br></pre></td></tr></table></figure>
+
+<h2 id="Reference"><a href="#Reference" class="headerlink" title="Reference"></a>Reference</h2><ul>
+<li><a href="https://cloud.google.com/sdk/docs/install">https://cloud.google.com/sdk/docs/install</a></li>
+<li><a href="https://cloud.google.com/binary-authorization/docs/getting-started-cli">https://cloud.google.com/binary-authorization/docs/getting-started-cli</a></li>
+<li><a href="https://cloud.google.com/blog/products/containers-kubernetes/kubectl-auth-changes-in-gke">https://cloud.google.com/blog/products/containers-kubernetes/kubectl-auth-changes-in-gke</a></li>
+</ul>
+]]></content>
+      <categories>
+        <category>技术漫谈</category>
+      </categories>
+      <tags>
+        <tag>kubernetes</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>分布式唯一ID的方案与实现</title>
+    <url>/posts/distributed-id-design-and-implementation/</url>
+    <content><![CDATA[<p>在互联网架构演变的过程中，分布式唯一ID被广泛使用。常见的解决方法有UUID，基于数据库的方案等，本文重点来谈谈最最常用的一个方案——Snowflake算法。</p>
+<span id="more"></span>
+
+<h2 id="什么是Snowflake算法"><a href="#什么是Snowflake算法" class="headerlink" title="什么是Snowflake算法"></a>什么是Snowflake算法</h2><p>Snowflake是一种可以大规模生成唯一ID的算法，它基于某些规则来保证。</p>
+<p>2011年Twitter公司在迁移MySQL数据到Cassandra时，需要一种新的方式来生成ID，因为Cassandra没有提供相应的唯一ID生成算法，所以诞生了Snowflake算法。</p>
+<p>Snowflake生成的ID是一个64bit的long类型，由以下3个部分组成：</p>
+<ul>
+<li>41位时间（存毫秒值，可以自定义起始时间，可使用69年）</li>
+<li>10机器码，最大允许1024台机器（实际使用0-255，共256台）</li>
+<li>12位序列号，每台机器每一毫秒最多可产生4096个序列号</li>
+</ul>
+<p><img src="/images/distributed-id-design-and-implementation/006tNbRwgy1fwr56686koj30d3024dfo.jpg" alt="006tNbRwgy1fwr56686koj30d3024dfo"></p>
+<p>除去第1位符号位，剩余63位可以保证1024台不同的机器每毫秒可产生4096不同的ID。换句话说，就是理论上每台机器每秒可产生409.6w个不同的ID，且最多可部署1024台机器。</p>
+<p><strong>强依赖系统时钟</strong></p>
+<p>Snowflake算法唯一不好的就是强依赖系统时钟，一旦系统时钟回拨了，那么就有可能产生重复的ID，这是不可以接受的，所以我们要想办法避免时钟回拨，或时钟回拨时要有告警，并停止生成ID。</p>
+<h2 id="部署架构"><a href="#部署架构" class="headerlink" title="部署架构"></a>部署架构</h2><p>在微服务架构的影响下，对分布式唯一ID的落地，我总结了两种部署架构，并讨论起利弊。</p>
+<h3 id="独立部署型"><a href="#独立部署型" class="headerlink" title="独立部署型"></a>独立部署型</h3><p><img src="/images/distributed-id-design-and-implementation/006tNbRwgy1fwypzo1r7lj30fl07j74i.jpg" alt="006tNbRwgy1fwypzo1r7lj30fl07j74i"></p>
+<p>如上图，把id生成单独做成一个服务，对外提供接口调用，如订单服务order-service需要一个唯一ID时就发起一次调用，库存服务stock-service也是同样。由id-service内部保证唯一。</p>
+<p><strong>优点</strong></p>
+<ul>
+<li>id全局唯一。所有应用系统的id都不会重复</li>
+</ul>
+<p><strong>缺点</strong></p>
+<ul>
+<li>性能差，获取id时需要发起调用。就算做成批量获取，还是需要网络消耗</li>
+<li>强依赖，对id-service要求极高，一旦出问题，业务系统全部不可用</li>
+</ul>
+<h3 id="嵌入部署型"><a href="#嵌入部署型" class="headerlink" title="嵌入部署型"></a>嵌入部署型</h3><p><img src="/images/distributed-id-design-and-implementation/006tNbRwgy1fwypztmperj30d3029mx1.jpg" alt="006tNbRwgy1fwypztmperj30d3029mx1"></p>
+<p>如上图，嵌入部署的话，意思是把id-service的逻辑做成工具类，直接跟着应用系统的集群一起部署，每次获取id无需走网络调用，直接本地调用工具类生成即可。</p>
+<p><strong>优点</strong></p>
+<ul>
+<li>性能好，直接本地工具调用，内存直接获取</li>
+<li>弱依赖，应用之间互相独立，互不影响</li>
+</ul>
+<p><strong>缺点</strong></p>
+<ul>
+<li>id应用唯一。只能保证同个应用下id唯一，跨应用id有可能是相同的</li>
+</ul>
+<h2 id="实现方案"><a href="#实现方案" class="headerlink" title="实现方案"></a>实现方案</h2><p>具体实现主要关注两个问题：<code>机器ID自动下发</code>及<code>防止时钟回拨</code>。</p>
+<h3 id="机器ID自动下发"><a href="#机器ID自动下发" class="headerlink" title="机器ID自动下发"></a>机器ID自动下发</h3><p>关于机器ID下发的具体实现，我们可以利用zookeeper的特性来实现。我们以应用为维度，每个应用都注册到<code>/snowflake</code>目录下，每个应用下有两个目录，<code>servers</code>目录以及<code>instances</code>目录。<code>servers</code>目录下的节点均为<code>持久化节点</code>，<code>instances</code>目录下的节点均为<code>临时节点</code>。</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">/snowflake</span><br><span class="line">	/app-name</span><br><span class="line">		/servers</span><br><span class="line">			/10.20.30.40:8888_0</span><br><span class="line">			/10.20.30.41:8888_1</span><br><span class="line">			/10.20.30.42:8888_2</span><br><span class="line">			...</span><br><span class="line">		/instances</span><br><span class="line">			/0</span><br><span class="line">			/1</span><br><span class="line">			/2</span><br><span class="line">			...</span><br><span class="line">			/255</span><br></pre></td></tr></table></figure>
+
+<p>下面流程展示了服务启动时获取机器ID的流程：</p>
+<p><img src="/images/distributed-id-design-and-implementation/006tNbRwgy1fwypzyc1o6j30b10jgjrl.jpg" alt="006tNbRwgy1fwypzyc1o6j30b10jgjrl"></p>
+<ol>
+<li>首先应用启动，得到自身应用相关信息，如应用名称，IP地址及端口等</li>
+<li>根据应用名称在对应的<code>servers</code>目录下，查找是否有匹配自身IP及端口的节点</li>
+<li>如果有跳到步骤4，没有则在<code>servers</code>下所有子节点中，从0～255中选出未被使用最小的机器ID</li>
+<li>获取到机器ID去<code>instances</code>目录下创建临时节点</li>
+<li>如果创建成功，则保存配置到<code>servers</code>中，并启动成功；如果创建失败，则判断重试次数，跳回步骤2或启动失败。</li>
+</ol>
+<blockquote>
+<p>为什么要这么做？用0～255的随机数去instances抢占也可以，为何还要保存配置到servers目录下？</p>
+<p>这么做的原因主要是尽可能地保证机器ID稳定，不变化。好处是可以缓存这个稳定的机器ID到本地磁盘文件，在zk不可用时，直接读取本地磁盘文件记录的机器ID启动，弱化了对zookeeper的依赖。</p>
+</blockquote>
+<h3 id="防止时钟回拨"><a href="#防止时钟回拨" class="headerlink" title="防止时钟回拨"></a>防止时钟回拨</h3><p>关于机器回拨的问题，可以分两种情况：<code>运行时回拨</code>和<code>启动时回拨</code>。</p>
+<p><strong>运行时回拨</strong></p>
+<p>这种情况可以在启动后每次生成id时在内存中用变量记录上一次的时间，一旦回拨可以及时发现，如回拨几毫秒可以选择等待，如过大范围回拨则抛异常，服务不可用。</p>
+<p><strong>启动时回拨</strong></p>
+<p>在进程启动时时钟已经发生回拨，这是用内存变量来记录上一次的时间以及没有多大作用了。这时本服务器的时钟已不可信，应该通过网络访问外部的时钟来判断。如开启NTP同步，基本可避免启动时已经发生回拨；美团的leaf-snowflake则是通过rpc的方式访问其他服务的系统时间做平均值来参考。只要启动时发现时钟回拨，则启动失败。</p>
+<h2 id="最佳实践"><a href="#最佳实践" class="headerlink" title="最佳实践"></a>最佳实践</h2><h3 id="多集群高可用"><a href="#多集群高可用" class="headerlink" title="多集群高可用"></a>多集群高可用</h3><p>预留机器码高2位作为集群表示位，即可以支持4个集群。</p>
+<p><img src="/images/distributed-id-design-and-implementation/image-20210727140118039.png" alt="image-20210727140118039"></p>
+<h3 id="奇偶均衡优化"><a href="#奇偶均衡优化" class="headerlink" title="奇偶均衡优化"></a>奇偶均衡优化</h3><p>由于在并发场景较低的场景下，同一毫秒下基本只生成一个ID，此时默认的序列号为0，这会导致雪花ID为偶数的概率非常大。</p>
+<p>为了使得ID的奇偶性均衡，我们在每次生成ID时，根据时间毫秒值除2取模作为序列号的起始位。</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">if</span> (timestamp == lastTimestamp) &#123;</span><br><span class="line">  sequence = (sequence + <span class="number">1L</span>) &amp; sequenceMask;</span><br><span class="line">  <span class="keyword">if</span> (sequence == <span class="number">0</span>) &#123;</span><br><span class="line">    timestamp = tilNextMillis(lastTimestamp);</span><br><span class="line">  &#125;</span><br><span class="line">&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">  <span class="comment">// sequence begin with 0 or 1 in every millis</span></span><br><span class="line">  sequence = lastTimestamp &amp; <span class="number">1L</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="防止时钟回拨的优化"><a href="#防止时钟回拨的优化" class="headerlink" title="防止时钟回拨的优化"></a>防止时钟回拨的优化</h3><p>上述时钟回拨的处理方式比较粗暴，对业务非常不友好，所以需要进一步做优化：</p>
+<ol>
+<li>每次生成ID是判断时钟是否回拨，如果回拨了毫秒值保持不变</li>
+<li>毫秒值不变会导致序列号自增，类似并发场景</li>
+<li>序列号位自增满后，毫秒数加1，同时重置序列号位</li>
+</ol>
+<p>目前启动时回拨在功能实现上有一定的复杂性和成本，暂无实现。需要依赖服务器的NTP同步，所以使用雪花算法的服务器建议都开启NTP同步并做好监控。</p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>本文是在工作中重构原有类snowflake算法使用不当情况下，做了一些探究并做了新版的实现。参考了一些现有的开源项目，和一些文章。如Twitter最早的官方材料，百度的uid-generator，美团的Leaf文章，以及微信的seqsvr等。</p>
+<p>根据业务情况，采用了嵌入部署型的snowflake，借鉴了美团leaf-snowflake的一些实践，并用本文所介绍的zookeeper自动下发机器ID的方案实现了分布式唯一ID生成的功能。</p>
+<h2 id="相关链接"><a href="#相关链接" class="headerlink" title="相关链接"></a>相关链接</h2><ul>
+<li><p><a href="https://tech.meituan.com/MT_Leaf.html">https://tech.meituan.com/MT_Leaf.html</a></p>
+</li>
+<li><p><a href="https://github.com/twitter-archive/snowflake">https://github.com/twitter-archive/snowflake</a></p>
+</li>
+<li><p><a href="https://github.com/baidu/uid-generator">https://github.com/baidu/uid-generator</a></p>
+</li>
+<li><p><a href="https://github.com/nebula-im/seqsvr">https://github.com/nebula-im/seqsvr</a></p>
+</li>
+</ul>
+]]></content>
+      <categories>
+        <category>技术漫谈</category>
+      </categories>
+      <tags>
+        <tag>distributed-system</tag>
+        <tag>snowflake</tag>
+        <tag>zookeeper</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>Dubbo负载均衡之加权轮训</title>
+    <url>/posts/dubbo-load-balance-round-robin/</url>
+    <content><![CDATA[<p>最近有个需求，需要对mq集群调用时做个权重分配，之前客户端对mq发送时都是普通轮询的策略，由于近期扩容，集群中部分服务器的性能不太一致，需要在mq发送时的策略做成带权重的轮询，让性能好的服务器处理更多的请求，也保护性能相对较差的服务器不被大流量压垮。实现此功能时参考了dubbo框架中的负载均衡轮询算法，在此做下笔记。</p>
+<span id="more"></span>
+
+<h2 id="问题"><a href="#问题" class="headerlink" title="问题"></a>问题</h2><p>在dubbo中，负载均衡的粒度可以细到方法级别。如图，在服务器A，服务器B和服务器C都提供hello()方法，消费者调用方法时需要选择其中一台服务器进行调用，当消费者对hello()进行大量调用时，如何将请求合理地分配到各服务器中，就是我们本文要探讨的问题。</p>
+<p><img src="/images/dubbo-load-balance-round-robin/006tNbRwly1fw96wkok1yj30b50bmjrh.jpg" alt="006tNbRwly1fw96wkok1yj30b50bmjrh"></p>
+<h2 id="解决"><a href="#解决" class="headerlink" title="解决"></a>解决</h2><p>解决方法有很多，在dubbo中默认提供了四种负载均衡策略（随机、轮询、最少活跃调用数、一致性Hash），这里我们只讨论<code>轮询</code>策略。</p>
+<h3 id="无权重轮询"><a href="#无权重轮询" class="headerlink" title="无权重轮询"></a>无权重轮询</h3><p>无权重的轮询非常简单，如上面的例子，只需依次循环调用各服务器就行。调用顺序如下：</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">[A, B, C, A, B, C, ...]</span><br></pre></td></tr></table></figure>
+
+<h3 id="带权重轮询"><a href="#带权重轮询" class="headerlink" title="带权重轮询"></a>带权重轮询</h3><p>一般来说，无权重轮询也够用了，但是如果A、B、C者三台服务器的性能不一样（假设A&gt;B&gt;C），我们希望更多的请求落在A服务器上，这时候该如何做呢？</p>
+<p>我们假设权重比为A:B:C&#x3D;6:3:1，有10个调用请求，那么比较直接想到的调用顺序如下：</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">[A, A, A, A, A, A, B, B, B, C]</span><br></pre></td></tr></table></figure>
+
+<p>请求按上面的顺序循环，的确是满足了按一定比例的分配，但是这样分配不太好，在一小段时间内，单台服务器连续处理多个请求会导致负载偏高，我们期望请求即要按权重分配，也要均匀地调用。</p>
+<p>我们用以下表格来表示，表格的高度表示权重，对应列分别表示服务器A、B、C。均匀的调用，即从左向右，从上到下遍历表格，得到调用顺序为如下：</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">[A, B, C, A, B, A, B, A, A, A]</span><br></pre></td></tr></table></figure>
+
+<p><img src="/images/dubbo-load-balance-round-robin/006tNbRwly1fw95hs8w5rj305k08wa9w.jpg" alt="006tNbRwly1fw95hs8w5rj305k08wa9w"></p>
+<p>到目前dubbo最新的版本2.6.4为止，RoundRobinLoadBalance采用的算法如下：</p>
+<ul>
+<li>用sequences来记录每个method的调用次数</li>
+<li>计算出最大权重值maxWeight，即算出上图表格的高度</li>
+<li>计算出最小权重值minWeight，用来与maxWeight比较判断是否有权重差</li>
+<li>计算出权重和weightSum，用来与调用次数做计算取余</li>
+<li>mod为当前调用次数与权重和的余数，即表格上的数标</li>
+<li>得到数标值也就确定了目标服务器</li>
+<li>源码的双层for循环就是遍历表格，得到目标服务器</li>
+<li>每次遍历没有命中时，v.decrement()是为了跳过表格中灰色部分</li>
+<li>每次遍历没用命中时，mod减1可理解为从表格数标0位置开始往下走了一步</li>
+<li>当mod &#x3D;&#x3D; 0且v.getValue() &gt; 0时，表示走到指定的位置，即选中的服务器</li>
+</ul>
+<p>啰嗦了一点，其实算法时比较简单的，可以结合以下源码和表格理解。</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">RoundRobinLoadBalance</span> <span class="keyword">extends</span> <span class="title class_">AbstractLoadBalance</span> &#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="type">String</span> <span class="variable">NAME</span> <span class="operator">=</span> <span class="string">&quot;roundrobin&quot;</span>;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> ConcurrentMap&lt;String, AtomicPositiveInteger&gt; sequences = <span class="keyword">new</span> <span class="title class_">ConcurrentHashMap</span>&lt;String, AtomicPositiveInteger&gt;();</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="keyword">protected</span> &lt;T&gt; Invoker&lt;T&gt; <span class="title function_">doSelect</span><span class="params">(List&lt;Invoker&lt;T&gt;&gt; invokers, URL url, Invocation invocation)</span> &#123;</span><br><span class="line">        <span class="type">String</span> <span class="variable">key</span> <span class="operator">=</span> invokers.get(<span class="number">0</span>).getUrl().getServiceKey() + <span class="string">&quot;.&quot;</span> + invocation.getMethodName();</span><br><span class="line">        <span class="type">int</span> <span class="variable">length</span> <span class="operator">=</span> invokers.size(); <span class="comment">// Number of invokers</span></span><br><span class="line">        <span class="type">int</span> <span class="variable">maxWeight</span> <span class="operator">=</span> <span class="number">0</span>; <span class="comment">// The maximum weight</span></span><br><span class="line">        <span class="type">int</span> <span class="variable">minWeight</span> <span class="operator">=</span> Integer.MAX_VALUE; <span class="comment">// The minimum weight</span></span><br><span class="line">        <span class="keyword">final</span> LinkedHashMap&lt;Invoker&lt;T&gt;, IntegerWrapper&gt; invokerToWeightMap = <span class="keyword">new</span> <span class="title class_">LinkedHashMap</span>&lt;Invoker&lt;T&gt;, IntegerWrapper&gt;();</span><br><span class="line">        <span class="type">int</span> <span class="variable">weightSum</span> <span class="operator">=</span> <span class="number">0</span>;</span><br><span class="line">        <span class="keyword">for</span> (<span class="type">int</span> <span class="variable">i</span> <span class="operator">=</span> <span class="number">0</span>; i &lt; length; i++) &#123;</span><br><span class="line">            <span class="type">int</span> <span class="variable">weight</span> <span class="operator">=</span> getWeight(invokers.get(i), invocation);</span><br><span class="line">            maxWeight = Math.max(maxWeight, weight); <span class="comment">// Choose the maximum weight</span></span><br><span class="line">            minWeight = Math.min(minWeight, weight); <span class="comment">// Choose the minimum weight</span></span><br><span class="line">            <span class="keyword">if</span> (weight &gt; <span class="number">0</span>) &#123;</span><br><span class="line">                invokerToWeightMap.put(invokers.get(i), <span class="keyword">new</span> <span class="title class_">IntegerWrapper</span>(weight));</span><br><span class="line">                weightSum += weight;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="type">AtomicPositiveInteger</span> <span class="variable">sequence</span> <span class="operator">=</span> sequences.get(key);</span><br><span class="line">        <span class="keyword">if</span> (sequence == <span class="literal">null</span>) &#123;</span><br><span class="line">            sequences.putIfAbsent(key, <span class="keyword">new</span> <span class="title class_">AtomicPositiveInteger</span>());</span><br><span class="line">            sequence = sequences.get(key);</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="type">int</span> <span class="variable">currentSequence</span> <span class="operator">=</span> sequence.getAndIncrement();</span><br><span class="line">        <span class="keyword">if</span> (maxWeight &gt; <span class="number">0</span> &amp;&amp; minWeight &lt; maxWeight) &#123;</span><br><span class="line">            <span class="type">int</span> <span class="variable">mod</span> <span class="operator">=</span> currentSequence % weightSum;</span><br><span class="line">            <span class="keyword">for</span> (<span class="type">int</span> <span class="variable">i</span> <span class="operator">=</span> <span class="number">0</span>; i &lt; maxWeight; i++) &#123;</span><br><span class="line">                <span class="keyword">for</span> (Map.Entry&lt;Invoker&lt;T&gt;, IntegerWrapper&gt; each : invokerToWeightMap.entrySet()) &#123;</span><br><span class="line">                    <span class="keyword">final</span> Invoker&lt;T&gt; k = each.getKey();</span><br><span class="line">                    <span class="keyword">final</span> <span class="type">IntegerWrapper</span> <span class="variable">v</span> <span class="operator">=</span> each.getValue();</span><br><span class="line">                    <span class="keyword">if</span> (mod == <span class="number">0</span> &amp;&amp; v.getValue() &gt; <span class="number">0</span>) &#123;</span><br><span class="line">                        <span class="keyword">return</span> k;</span><br><span class="line">                    &#125;</span><br><span class="line">                    <span class="keyword">if</span> (v.getValue() &gt; <span class="number">0</span>) &#123;</span><br><span class="line">                        v.decrement();</span><br><span class="line">                        mod--;</span><br><span class="line">                    &#125;</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="comment">// Round robin</span></span><br><span class="line">        <span class="keyword">return</span> invokers.get(currentSequence % length);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">class</span> <span class="title class_">IntegerWrapper</span> &#123;</span><br><span class="line">        <span class="keyword">private</span> <span class="type">int</span> value;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">public</span> <span class="title function_">IntegerWrapper</span><span class="params">(<span class="type">int</span> value)</span> &#123;</span><br><span class="line">            <span class="built_in">this</span>.value = value;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">public</span> <span class="type">int</span> <span class="title function_">getValue</span><span class="params">()</span> &#123;</span><br><span class="line">            <span class="keyword">return</span> value;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">setValue</span><span class="params">(<span class="type">int</span> value)</span> &#123;</span><br><span class="line">            <span class="built_in">this</span>.value = value;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">decrement</span><span class="params">()</span> &#123;</span><br><span class="line">            <span class="built_in">this</span>.value--;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="带权重轮询（优化版）"><a href="#带权重轮询（优化版）" class="headerlink" title="带权重轮询（优化版）"></a>带权重轮询（优化版）</h3><p>本以为上面的轮询算法就可以直接拿来借鉴，但是发现dubbo最近有个提交是优化该算法的，只是还没有并入迭代的版本，处于未正式发布状态。我们来看看相关的issue。</p>
+<p>问题发起的issue：<a href="https://github.com/apache/incubator-dubbo/issues/2578">https://github.com/apache/incubator-dubbo/issues/2578</a></p>
+<p>接受PR的issue：<a href="https://github.com/apache/incubator-dubbo/pull/2586">https://github.com/apache/incubator-dubbo/pull/2586</a></p>
+<p>旧算法的时间复杂度是O(n*w)，新算法的时间复杂度为O(n)。n为invokers数，w为weight。</p>
+<p>在极端情况下，个别weight特别大时，会导致旧算法的性能较差。</p>
+<p>还是用表格来表示，在新的算法中，10次请求得到的顺序，如数标所示，即：</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">[A, B, A, B, A, A, A, A, B, C]</span><br></pre></td></tr></table></figure>
+
+<p>由于轮训该顺序会不断的重复，其实与前面算法的结果是一样的，只是把前三位挪到了后面而已。</p>
+<p><img src="/images/dubbo-load-balance-round-robin/006tNbRwly1fw96wop4i4j30ac0atmx6.jpg" alt="006tNbRwly1fw96wop4i4j30ac0atmx6"></p>
+<p>新版RoundRobinLoadBalance的算法基于原来的做了改良，特点如下：</p>
+<ul>
+<li>新增indexSeqs，与sequences集合使用。sequences意义与原来不同。</li>
+<li>算法中的index由indexSeqs与invokers的数量取余得到，可理解为表格的横坐标</li>
+<li>算法中的currentWeight由sequeces与maxWeight取余得到，可理解为表格的纵坐标</li>
+<li>用while单层遍历，每次判断当前元素的权重是否大于currentWeight，true即选中</li>
+<li>图中的数标即为遍历选中的顺序</li>
+</ul>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">RoundRobinLoadBalance</span> <span class="keyword">extends</span> <span class="title class_">AbstractLoadBalance</span> &#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="type">String</span> <span class="variable">NAME</span> <span class="operator">=</span> <span class="string">&quot;roundrobin&quot;</span>;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> ConcurrentMap&lt;String, AtomicPositiveInteger&gt; sequences = <span class="keyword">new</span> <span class="title class_">ConcurrentHashMap</span>&lt;String, AtomicPositiveInteger&gt;();</span><br><span class="line"></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> ConcurrentMap&lt;String, AtomicPositiveInteger&gt; indexSeqs = <span class="keyword">new</span> <span class="title class_">ConcurrentHashMap</span>&lt;String, AtomicPositiveInteger&gt;();</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="keyword">protected</span> &lt;T&gt; Invoker&lt;T&gt; <span class="title function_">doSelect</span><span class="params">(List&lt;Invoker&lt;T&gt;&gt; invokers, URL url, Invocation invocation)</span> &#123;</span><br><span class="line">        <span class="type">String</span> <span class="variable">key</span> <span class="operator">=</span> invokers.get(<span class="number">0</span>).getUrl().getServiceKey() + <span class="string">&quot;.&quot;</span> + invocation.getMethodName();</span><br><span class="line">        <span class="type">int</span> <span class="variable">length</span> <span class="operator">=</span> invokers.size(); <span class="comment">// Number of invokers</span></span><br><span class="line">        <span class="type">int</span> <span class="variable">maxWeight</span> <span class="operator">=</span> <span class="number">0</span>; <span class="comment">// The maximum weight</span></span><br><span class="line">        <span class="type">int</span> <span class="variable">minWeight</span> <span class="operator">=</span> Integer.MAX_VALUE; <span class="comment">// The minimum weight</span></span><br><span class="line">        <span class="keyword">final</span> List&lt;Invoker&lt;T&gt;&gt; nonZeroWeightedInvokers = <span class="keyword">new</span> <span class="title class_">ArrayList</span>&lt;&gt;();</span><br><span class="line">        <span class="keyword">for</span> (<span class="type">int</span> <span class="variable">i</span> <span class="operator">=</span> <span class="number">0</span>; i &lt; length; i++) &#123;</span><br><span class="line">            <span class="type">int</span> <span class="variable">weight</span> <span class="operator">=</span> getWeight(invokers.get(i), invocation);</span><br><span class="line">            maxWeight = Math.max(maxWeight, weight); <span class="comment">// Choose the maximum weight</span></span><br><span class="line">            minWeight = Math.min(minWeight, weight); <span class="comment">// Choose the minimum weight</span></span><br><span class="line">            <span class="keyword">if</span> (weight &gt; <span class="number">0</span>) &#123;</span><br><span class="line">                nonZeroWeightedInvokers.add(invokers.get(i));</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="type">AtomicPositiveInteger</span> <span class="variable">sequence</span> <span class="operator">=</span> sequences.get(key);</span><br><span class="line">        <span class="keyword">if</span> (sequence == <span class="literal">null</span>) &#123;</span><br><span class="line">            sequences.putIfAbsent(key, <span class="keyword">new</span> <span class="title class_">AtomicPositiveInteger</span>());</span><br><span class="line">            sequence = sequences.get(key);</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (maxWeight &gt; <span class="number">0</span> &amp;&amp; minWeight &lt; maxWeight) &#123;</span><br><span class="line">            <span class="type">AtomicPositiveInteger</span> <span class="variable">indexSeq</span> <span class="operator">=</span> indexSeqs.get(key);</span><br><span class="line">            <span class="keyword">if</span> (indexSeq == <span class="literal">null</span>) &#123;</span><br><span class="line">                indexSeqs.putIfAbsent(key, <span class="keyword">new</span> <span class="title class_">AtomicPositiveInteger</span>(-<span class="number">1</span>));</span><br><span class="line">                indexSeq = indexSeqs.get(key);</span><br><span class="line">            &#125;</span><br><span class="line">            length = nonZeroWeightedInvokers.size();</span><br><span class="line">            <span class="keyword">while</span> (<span class="literal">true</span>) &#123;</span><br><span class="line">                <span class="type">int</span> <span class="variable">index</span> <span class="operator">=</span> indexSeq.incrementAndGet() % length;</span><br><span class="line">                <span class="type">int</span> currentWeight;</span><br><span class="line">                <span class="keyword">if</span> (index == <span class="number">0</span>) &#123;</span><br><span class="line">                    currentWeight = sequence.incrementAndGet() % maxWeight;</span><br><span class="line">                &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                    currentWeight = sequence.get() % maxWeight;</span><br><span class="line">                &#125;</span><br><span class="line">                <span class="keyword">if</span> (getWeight(nonZeroWeightedInvokers.get(index), invocation) &gt; currentWeight) &#123;</span><br><span class="line">                    <span class="keyword">return</span> nonZeroWeightedInvokers.get(index);</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="comment">// Round robin</span></span><br><span class="line">        <span class="keyword">return</span> invokers.get(sequence.getAndIncrement() % length);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="性能测试"><a href="#性能测试" class="headerlink" title="性能测试"></a>性能测试</h3><p>这里简单提供下我本地测试的数据，我模拟了100w次请求，造了10个invoker，权重分别为：</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">[100,100,200,200,300,300,400,400,500,50000]</span><br></pre></td></tr></table></figure>
+
+<p>故意让最后一个权重设置大一点，得到结果如下：</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">优化前耗时：548445 mills</span><br><span class="line">请求分布：[2000,2000,4000,4000,6000,6000,7925,7925,9825,950325]</span><br><span class="line"></span><br><span class="line">优化后耗时：1665 millis</span><br><span class="line">请求分布：[1999,1999,3999,3999,5999,5999,7927,7927,9826,950326]</span><br></pre></td></tr></table></figure>
+
+<p>在以上条件，耗时竟相差330倍左右，看来这个优化后续很快就会纳入正式版中。</p>
+<p>由于篇幅原因，就不贴测试代码与机器配置了，这里只是提供一些测试报告辅助说明。</p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>原本只是为了了解dubbo负载均衡轮询带权重的实现，却意外收获了该算法的优化。我们经常听说<code>时间换空间，空间换时间</code>，这里便是典型的优化案例，利用少量的空间换取时间，将时间复杂度从O(n*w)降到O(n)。</p>
+<p>在以后的工作中，要多考虑性能上的优化，一般多重循环都有优化空间。</p>
+]]></content>
+      <categories>
+        <category>技术漫谈</category>
+      </categories>
+      <tags>
+        <tag>dubbo</tag>
+        <tag>loadbalance</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>框架类版本管理分支规范</title>
+    <url>/posts/framework-branch-model/</url>
+    <content><![CDATA[<p>在企业内部关于代码项目的类型大致可以分为两类，<code>业务型代码</code>与<code>框架型代码</code>。<code>业务型代码</code>即以业务快速迭代，有完善的业务测试并交付；<code>框架型代码</code>主要是对针对所有业务代码做一些通用型下层，或一些工具类，或开源项目扩展集成等。这两类项目在Git分支协作使用方式上，还是有点不同。</p>
+<span id="more"></span>
+
+<p><code>业务型代码</code>可以采用GitFlow这类型协作方式，并且有一些GUI工具都支持GitFlow，如GiKraken，SourceTree等。有人也会说GitFlow不好，比如使用阿里的AoneFlow模式会更好，其实一般中小心型企业有GitFlow来做业务代码的分支规范，有现成的工具是最好的选择了，至于想用AoneFlow模式的也可以，但是要自己在发布系统上做相应的分支操作逻辑等。</p>
+<p><code>框架型代码</code>一般来说不是以周期性迭代交付的，而是要求稳定的功能输出，既要有稳定的版本，也要有新功能的加入，这里用Trunk-Based分支模式比较适合。</p>
+<p>今天要分享的就是<code>框架型代码</code>的版本管理分支规范，参考了Trunk-Based并做了相应的处理规范。</p>
+<p>我们框架类型的项目采用的版本管理参考<a href="http://dubbo.apache.org/zh-cn/docs/dev/release.html">Dubbo</a>的方式，这里需要对Git分支管理做一个补充。</p>
+<h2 id="版本管理"><a href="#版本管理" class="headerlink" title="版本管理"></a>版本管理</h2><p><strong>新功能的开发</strong> 和 <strong>稳定性的提高</strong> 对产品都很重要。但是添加新功能会影响稳定性，Dubbo 使用如下的版本开发模式来保障两者。</p>
+<ul>
+<li>BugFix 版本：低版本，比如 <code>2.4.x</code>。是 GA 版本，线上使用的版本，只会 BugFix，升级第三位版本号。</li>
+<li>新功能版本：高版本，比如 <code>2.5.x</code>。加新功能的版本，会给对新功能有需求的应用试用。</li>
+</ul>
+<p><code>2.5.x</code> 的新功能基本稳定后，进入 <code>2.5.x</code> 试用阶段。找足够多的应用试用 <code>2.5.x</code> 版本。</p>
+<p>在 <code>2.5.x</code> 够稳定后：</p>
+<ul>
+<li><code>2.5.x</code> 成为 GA 版本，只 BugFix，推广使用此版本。如何可行，可以推进应用在期望的时间点内升级到 GA 版本。</li>
+<li><code>2.4.x</code> 不再开发，应用碰到 Bug 让直接升级。（这个称为“夕阳条款”）</li>
+<li>从 <code>2.5.x</code> 拉成分支 <code>2.6.0</code>，作为新功能开发版本。</li>
+</ul>
+<h2 id="分支管理"><a href="#分支管理" class="headerlink" title="分支管理"></a>分支管理</h2><p>由于框架类的代码管理不同于业务代码，这里抛弃<code>GitFlow</code>严格的模型，借鉴<code>TrunkBased</code>模型，定下如下分支管理规范。</p>
+<p>根据GA版本与Feature版本，我们需要两个<strong>并行主干分支</strong>，假设当前的GA版本是<code>2.5.x</code>，那么主干分支如下：</p>
+<ul>
+<li>master分支：作为当前Feature主干分支（2.6.x），做新功能开发。</li>
+<li>2.5.x分支：作为当前GA主干分支，只做bug修复。</li>
+</ul>
+<p>当Feature版本2.6.x足够稳定后：</p>
+<ul>
+<li>2.6.x成为新的GA版本，就从当前的master创建新分支<code>2.6.x</code>，作为新的GA分支</li>
+<li>master分支则成为新的Feature分支，即2.7.x</li>
+<li>旧的GA版本2.5.x分支停止开发维护，应用碰到Bug直接升级新版GA（“夕阳条款”）</li>
+</ul>
+<h3 id="release发布"><a href="#release发布" class="headerlink" title="release发布"></a>release发布</h3><p>无论是GA版本，还是Feature版本，都需要发布具体的版本，这里都统一使用同样的逻辑。</p>
+<p>如Feature版本，即所在master分支：</p>
+<ul>
+<li>在master分支修改代码中的版本号为RELEASE类型</li>
+<li>提交并创建相应的tag，<code>v2.7.0</code>，然后push</li>
+<li>在利用该tag发布代码</li>
+<li>在master分支修改代码中的版本号为SNAPSHOT类型</li>
+</ul>
+<p>如GA版本，即所在的2.6.x分支</p>
+<ul>
+<li>在2.6.x分支修改代码中的版本号为RELEASE类型</li>
+<li>提交并创建相应的tag，<code>v2.6.0</code>，然后push</li>
+<li>在利用该tag发布代码</li>
+<li>在2.6.x分支修改代码中的版本号为SNAPSHOT类型</li>
+</ul>
+<h3 id="bug修复"><a href="#bug修复" class="headerlink" title="bug修复"></a>bug修复</h3><p>由于有两个并行主干分支，所以修复bug时需考虑两种情况：</p>
+<ul>
+<li>Feature版本无需修复，只需GA版本修复</li>
+<li>Feature版本和GA版本，需要同时修复Bug</li>
+</ul>
+<p>1）只需GA版本修复</p>
+<p>这种情况比较简单，直接在当前的GA分支上提交修复bug即可。如在GA版本分支2.6.x上修复</p>
+<p>2）需要同时修复</p>
+<p>两个分支需要同时修复时，这里我们不考虑<code>merge</code>的方式，这样会使分支结构不清晰，我们采用</p>
+<p><code>cherry-pick</code>的方式，操作如下：</p>
+<ul>
+<li>在当前的Feature版本，即master分支上，修复bug，并提交</li>
+<li>切换到GA版本，将master分支上的bug修复提交<code>cherry-pick</code>到当前分支</li>
+</ul>
+<p>以上方式就是bug修复的逻辑。</p>
+<p>如果需要修复完就发布，就类似于hotfix，我们不采用hotfix分支，直接按上面的<strong>release发布</strong>逻辑即可。</p>
+<h3 id="feature分支"><a href="#feature分支" class="headerlink" title="feature分支"></a>feature分支</h3><p>理论上来说新特性统一在Feature版本中实现，即直接在master分支开发实现即可。但如果实在有些试验性的新功能需要开发，并且不想纳入当前的Feature版本，那么我们可以这样操作：</p>
+<ul>
+<li>在当前的master分支，创建新分支feature&#x2F;xxx</li>
+<li>在新的feature分支开发</li>
+<li>当需要纳入Feature版本时，切换到master分支，merge该功能分支</li>
+</ul>
+<h3 id="提交注意"><a href="#提交注意" class="headerlink" title="提交注意"></a>提交注意</h3><p>多人协作开发时，会在同个分支提交代码，如果遇到本地分布与远程分支有分叉时（即push不上去），这是尽量不要使用pull，而是采用rebase的方式。</p>
+<p>如将本地master分支rebase到origin&#x2F;master分支，保持分支的整洁性。</p>
+<h2 id="分支示意图"><a href="#分支示意图" class="headerlink" title="分支示意图"></a>分支示意图</h2><p><img src="/images/framework-branch-model/gb.png" alt="gb"></p>
+<h2 id="相关链接"><a href="#相关链接" class="headerlink" title="相关链接"></a>相关链接</h2><ul>
+<li><a href="https://nvie.com/posts/a-successful-git-branching-model/">https://nvie.com/posts/a-successful-git-branching-model/</a></li>
+<li><a href="https://trunkbaseddevelopment.com/">https://trunkbaseddevelopment.com/</a></li>
+<li><a href="https://yq.aliyun.com/articles/573549">https://yq.aliyun.com/articles/573549</a></li>
+</ul>
+]]></content>
+      <categories>
+        <category>技术漫谈</category>
+      </categories>
+      <tags>
+        <tag>git</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>在Java应用中使用gRPC</title>
+    <url>/posts/grpc-java-introduction/</url>
+    <content><![CDATA[<p>在复杂微服务架构体系下，不可避免的就是<strong>跨语言</strong>通信场景下，而在日常的开发又可能面临着<strong>跨平台</strong>通信。<code>gRPC</code>是Google在2015年开源的跨平台，跨语言的通信框架，结合<code>Protocol Buffers</code>工具做序列化，拥有很好的性能表现。有兴趣可以了解下<em>grpc的动机与设计原则</em>。在Java领域已经有Dubbo这种较为全面的服务治理型的RPC框架，为什么还要重视起gRPC？未来微服务架构会走向Mesh，所有服务治理的功能会下层到Sidecar，客户端会轻量到只能最基础的通信功能，再加上应用层的逻辑；以及越来越多的偏基础层组件需要满足上层多语言的请求并保证高性能，这都会使得gRPC得到广泛的应用。</p>
+<span id="more"></span>
+
+<h2 id="如何使用"><a href="#如何使用" class="headerlink" title="如何使用"></a>如何使用</h2><h3 id="Maven配置"><a href="#Maven配置" class="headerlink" title="Maven配置"></a>Maven配置</h3><p>使用gRPC时Maven主要有3个依赖：</p>
+<ul>
+<li><code>grpc-netty-shaded</code></li>
+<li><code>grpc-protobuf</code></li>
+<li><code>grpc-stub</code></li>
+</ul>
+<p>生成的类需要这些包里的基础类，所以这些依赖是必须的。</p>
+<p>使用gRPC时Maven主要有2个插件：</p>
+<ul>
+<li><code>os-maven-plugin</code>，用来获取当前操作系统的的信息并设置到maven属性中</li>
+<li><code>protobuf-maven-plugin</code>，根据约定的方式，在编译期对proto文件进行编译</li>
+</ul>
+<figure class="highlight xml"><table><tr><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">properties</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">project.build.sourceEncoding</span>&gt;</span>UTF-8<span class="tag">&lt;/<span class="name">project.build.sourceEncoding</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">maven.compiler.source</span>&gt;</span>1.8<span class="tag">&lt;/<span class="name">maven.compiler.source</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">maven.compiler.target</span>&gt;</span>1.8<span class="tag">&lt;/<span class="name">maven.compiler.target</span>&gt;</span></span><br><span class="line"></span><br><span class="line">    <span class="tag">&lt;<span class="name">os-maven-plugin.version</span>&gt;</span>1.6.2<span class="tag">&lt;/<span class="name">os-maven-plugin.version</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">protobuf-maven-plugin.version</span>&gt;</span>0.6.1<span class="tag">&lt;/<span class="name">protobuf-maven-plugin.version</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">protoc.version</span>&gt;</span>3.14.0<span class="tag">&lt;/<span class="name">protoc.version</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">grpc.version</span>&gt;</span>1.34.1<span class="tag">&lt;/<span class="name">grpc.version</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">properties</span>&gt;</span></span><br><span class="line"></span><br><span class="line"><span class="tag">&lt;<span class="name">dependencies</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>io.grpc<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>grpc-netty-shaded<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">version</span>&gt;</span>$&#123;grpc.version&#125;<span class="tag">&lt;/<span class="name">version</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>io.grpc<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>grpc-protobuf<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">version</span>&gt;</span>$&#123;grpc.version&#125;<span class="tag">&lt;/<span class="name">version</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>io.grpc<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>grpc-stub<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">version</span>&gt;</span>$&#123;grpc.version&#125;<span class="tag">&lt;/<span class="name">version</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">dependencies</span>&gt;</span></span><br><span class="line"></span><br><span class="line"><span class="tag">&lt;<span class="name">build</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">plugins</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">plugin</span>&gt;</span></span><br><span class="line">            <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>kr.motd.maven<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span><br><span class="line">            <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>os-maven-plugin<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span><br><span class="line">            <span class="tag">&lt;<span class="name">version</span>&gt;</span>$&#123;os-maven-plugin.version&#125;<span class="tag">&lt;/<span class="name">version</span>&gt;</span></span><br><span class="line">            <span class="tag">&lt;<span class="name">executions</span>&gt;</span></span><br><span class="line">                <span class="tag">&lt;<span class="name">execution</span>&gt;</span></span><br><span class="line">                    <span class="tag">&lt;<span class="name">phase</span>&gt;</span>initialize<span class="tag">&lt;/<span class="name">phase</span>&gt;</span></span><br><span class="line">                    <span class="tag">&lt;<span class="name">goals</span>&gt;</span></span><br><span class="line">                        <span class="tag">&lt;<span class="name">goal</span>&gt;</span>detect<span class="tag">&lt;/<span class="name">goal</span>&gt;</span></span><br><span class="line">                    <span class="tag">&lt;/<span class="name">goals</span>&gt;</span></span><br><span class="line">                <span class="tag">&lt;/<span class="name">execution</span>&gt;</span></span><br><span class="line">            <span class="tag">&lt;/<span class="name">executions</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;/<span class="name">plugin</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">plugin</span>&gt;</span></span><br><span class="line">            <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>org.xolstice.maven.plugins<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span><br><span class="line">            <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>protobuf-maven-plugin<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span><br><span class="line">            <span class="tag">&lt;<span class="name">version</span>&gt;</span>$&#123;protobuf-maven-plugin.version&#125;<span class="tag">&lt;/<span class="name">version</span>&gt;</span></span><br><span class="line">            <span class="tag">&lt;<span class="name">configuration</span>&gt;</span></span><br><span class="line">                <span class="tag">&lt;<span class="name">protocArtifact</span>&gt;</span>com.google.protobuf:protoc:$&#123;protoc.version&#125;:exe:$&#123;os.detected.classifier&#125;<span class="tag">&lt;/<span class="name">protocArtifact</span>&gt;</span></span><br><span class="line">                <span class="tag">&lt;<span class="name">pluginId</span>&gt;</span>grpc-java<span class="tag">&lt;/<span class="name">pluginId</span>&gt;</span></span><br><span class="line">                <span class="tag">&lt;<span class="name">pluginArtifact</span>&gt;</span>io.grpc:protoc-gen-grpc-java:$&#123;grpc.version&#125;:exe:$&#123;os.detected.classifier&#125;<span class="tag">&lt;/<span class="name">pluginArtifact</span>&gt;</span></span><br><span class="line">            <span class="tag">&lt;/<span class="name">configuration</span>&gt;</span></span><br><span class="line">            <span class="tag">&lt;<span class="name">executions</span>&gt;</span></span><br><span class="line">                <span class="tag">&lt;<span class="name">execution</span>&gt;</span></span><br><span class="line">                    <span class="tag">&lt;<span class="name">goals</span>&gt;</span></span><br><span class="line">                        <span class="tag">&lt;<span class="name">goal</span>&gt;</span>compile<span class="tag">&lt;/<span class="name">goal</span>&gt;</span></span><br><span class="line">                        <span class="tag">&lt;<span class="name">goal</span>&gt;</span>compile-custom<span class="tag">&lt;/<span class="name">goal</span>&gt;</span></span><br><span class="line">                    <span class="tag">&lt;/<span class="name">goals</span>&gt;</span></span><br><span class="line">                <span class="tag">&lt;/<span class="name">execution</span>&gt;</span></span><br><span class="line">            <span class="tag">&lt;/<span class="name">executions</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;/<span class="name">plugin</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;/<span class="name">plugins</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">build</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="编写proto"><a href="#编写proto" class="headerlink" title="编写proto"></a>编写proto</h3><p>protobuf-maven-plugin默认会在扫描<code>src/main/proto</code>目录下的proto文件，基于约定大于配置原则，创建<code>src/main/proto/HelloWorld.proto</code></p>
+<figure class="highlight protobuf"><table><tr><td class="code"><pre><span class="line">syntax = <span class="string">&quot;proto3&quot;</span>;</span><br><span class="line"></span><br><span class="line"><span class="keyword">option</span> java_package = <span class="string">&quot;io.github.nisiyong.example&quot;</span>;</span><br><span class="line"></span><br><span class="line"><span class="keyword">service </span><span class="title class_">Greeter</span> &#123;</span><br><span class="line">  <span class="function"><span class="keyword">rpc</span> SayHello (HelloRequest) <span class="keyword">returns</span> (HelloReply) </span>&#123;&#125;</span><br><span class="line">  <span class="function"><span class="keyword">rpc</span> SayHelloAgain (HelloRequest) <span class="keyword">returns</span> (HelloReply) </span>&#123;&#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">message </span><span class="title class_">HelloRequest</span> &#123;</span><br><span class="line">  <span class="type">string</span> name = <span class="number">1</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">message </span><span class="title class_">HelloReply</span> &#123;</span><br><span class="line">  <span class="type">string</span> message = <span class="number">1</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这里借助maven插件直接生成源码，生成后的代码默认在<code>target/generated-sources/protobuf</code>目录下。</p>
+<figure class="highlight bash"><table><tr><td class="code"><pre><span class="line">$ mvn clean compile</span><br><span class="line">$ tree target/generated-sources/protobuf</span><br><span class="line">target/generated-sources/protobuf</span><br><span class="line">├── grpc-java</span><br><span class="line">│   └── io</span><br><span class="line">│       └── github</span><br><span class="line">│           └── nisiyong</span><br><span class="line">│               └── example</span><br><span class="line">│                   └── GreeterGrpc.java</span><br><span class="line">└── java</span><br><span class="line">    └── io</span><br><span class="line">        └── github</span><br><span class="line">            └── nisiyong</span><br><span class="line">                └── example</span><br><span class="line">                    └── HelloWorld.java</span><br></pre></td></tr></table></figure>
+
+<p>为了在<code>src/main/java</code>的其他类使用生成的类，IDEA需要设置以下目录为<code>Generated Sources Root</code>：</p>
+<ul>
+<li>target&#x2F;generated-sources&#x2F;protobuf&#x2F;grpc-java</li>
+<li>target&#x2F;generated-sources&#x2F;protobuf&#x2F;java</li>
+</ul>
+<h3 id="服务端示例"><a href="#服务端示例" class="headerlink" title="服务端示例"></a>服务端示例</h3><p>根据生成的<code>*ImplBase</code>类，编写接口实现</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">GreeterImpl</span> <span class="keyword">extends</span> <span class="title class_">GreeterGrpc</span>.GreeterImplBase &#123;</span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">sayHello</span><span class="params">(HelloWorld.HelloRequest request, StreamObserver&lt;HelloWorld.HelloReply&gt; responseObserver)</span> &#123;</span><br><span class="line">        <span class="type">String</span> <span class="variable">name</span> <span class="operator">=</span> request.getName();</span><br><span class="line">        System.out.println(<span class="keyword">new</span> <span class="title class_">Date</span>().toString() + <span class="string">&quot;Receive: &quot;</span> + name);</span><br><span class="line">        HelloWorld.<span class="type">HelloReply</span> <span class="variable">helloReply</span> <span class="operator">=</span> HelloWorld.HelloReply.newBuilder()</span><br><span class="line">                .setMessage(<span class="string">&quot;Hello, &quot;</span> + name)</span><br><span class="line">                .build();</span><br><span class="line"></span><br><span class="line">        responseObserver.onNext(helloReply);</span><br><span class="line">        responseObserver.onCompleted();</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>设置监听端口，关联接口实现类后启动服务</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title function_">start</span><span class="params">(<span class="type">int</span> port)</span> <span class="keyword">throws</span> IOException &#123;</span><br><span class="line">    server = ServerBuilder.forPort(port)</span><br><span class="line">            .addService(<span class="keyword">new</span> <span class="title class_">GreeterImpl</span>())</span><br><span class="line">            .build()</span><br><span class="line">            .start();</span><br><span class="line">    System.out.println(<span class="string">&quot;Server started, listening on &quot;</span> + port);</span><br><span class="line"></span><br><span class="line">    Runtime.getRuntime().addShutdownHook(<span class="keyword">new</span> <span class="title class_">Thread</span>(() -&gt; &#123;</span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            System.err.println(<span class="string">&quot;*** shutting down gRPC server since JVM is shutting down&quot;</span>);</span><br><span class="line">            HelloWorldServer.<span class="built_in">this</span>.stop();</span><br><span class="line">        &#125; <span class="keyword">catch</span> (InterruptedException e) &#123;</span><br><span class="line">            e.printStackTrace();</span><br><span class="line">        &#125;</span><br><span class="line">        System.err.println(<span class="string">&quot;*** server shut down&quot;</span>);</span><br><span class="line">    &#125;));</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="客户端示例"><a href="#客户端示例" class="headerlink" title="客户端示例"></a>客户端示例</h3><p>根据服务端提供的地址端口创建连接，然后创建接口stub对象</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="title function_">HelloWorldClient</span><span class="params">(Channel channel)</span> &#123;</span><br><span class="line">    <span class="built_in">this</span>.blockingStub = GreeterGrpc.newBlockingStub(channel);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title function_">main</span><span class="params">(String[] args)</span> <span class="keyword">throws</span> InterruptedException &#123;</span><br><span class="line">    <span class="type">String</span> <span class="variable">target</span> <span class="operator">=</span> System.getProperty(<span class="string">&quot;server.address&quot;</span>, <span class="string">&quot;localhost:8081&quot;</span>);</span><br><span class="line">    <span class="type">String</span> <span class="variable">name</span> <span class="operator">=</span> <span class="string">&quot;world&quot;</span>;</span><br><span class="line">    <span class="keyword">if</span> (args.length &gt; <span class="number">0</span>) &#123;</span><br><span class="line">        name = args[<span class="number">0</span>];</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="type">ManagedChannel</span> <span class="variable">channel</span> <span class="operator">=</span> ManagedChannelBuilder.forTarget(target)</span><br><span class="line">            .usePlaintext()</span><br><span class="line">            .build();</span><br><span class="line"></span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">        <span class="type">HelloWorldClient</span> <span class="variable">helloWorldClient</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">HelloWorldClient</span>(channel);</span><br><span class="line">        helloWorldClient.greet(name);</span><br><span class="line">    &#125; <span class="keyword">catch</span> (Exception e) &#123;</span><br><span class="line">        channel.shutdownNow().awaitTermination(<span class="number">5</span>, TimeUnit.SECONDS);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>使用stub对象，客户端发起远程调用</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">greet</span><span class="params">(String name)</span> &#123;</span><br><span class="line">    System.out.println(<span class="string">&quot;Will try to greet &quot;</span> + name + <span class="string">&quot; ...&quot;</span>);</span><br><span class="line">    HelloWorld.<span class="type">HelloRequest</span> <span class="variable">helloRequest</span> <span class="operator">=</span> HelloWorld.HelloRequest.newBuilder()</span><br><span class="line">            .setName(name)</span><br><span class="line">            .build();</span><br><span class="line"></span><br><span class="line">    HelloWorld.HelloReply response;</span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">        response = blockingStub.sayHello(helloRequest);</span><br><span class="line">    &#125; <span class="keyword">catch</span> (StatusRuntimeException e) &#123;</span><br><span class="line">        System.err.println(<span class="string">&quot;RPC failed: &quot;</span> + e.getStatus());</span><br><span class="line">        <span class="keyword">return</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    System.out.println(<span class="string">&quot;Greeting: &quot;</span> + response.getMessage());</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>完整示例代码可参考：<a href="https://github.com/nisiyong/grpc-java-example">https://github.com/nisiyong/grpc-java-example</a></p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>本文主要介绍了如何在Java项目中使用gRPC，主要是介绍了对应的maven插件使用，IDE相关设置，并用一个基本的示例演示了gRPC的使用。使用原生的<code>protoc</code>在项目中开发中会比较低效，快速熟悉工具后便可以高效的进行开发。</p>
+<h2 id="References"><a href="#References" class="headerlink" title="References"></a>References</h2><ul>
+<li>gRPC, <a href="https://grpc.io/docs/what-is-grpc/introduction/">https://grpc.io/docs/what-is-grpc/introduction/</a></li>
+<li>Protocol Buffers, <a href="https://developers.google.com/protocol-buffers/docs/proto3">https://developers.google.com/protocol-buffers/docs/proto3</a></li>
+<li>gRPC Motivation and Design Principles, <a href="https://grpc.io/blog/principles/">https://grpc.io/blog/principles/</a></li>
+<li>os-maven-plugin, <a href="https://github.com/trustin/os-maven-plugin">https://github.com/trustin/os-maven-plugin</a></li>
+<li>protobuf-maven-plugin, <a href="https://www.xolstice.org/protobuf-maven-plugin/usage.html">https://www.xolstice.org/protobuf-maven-plugin/usage.html</a></li>
+</ul>
+]]></content>
+      <categories>
+        <category>技术漫谈</category>
+      </categories>
+      <tags>
+        <tag>grpc</tag>
+        <tag>protobuf</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>如何在CentOS 7中创建sudo用户</title>
+    <url>/posts/how-to-create-a-sudo-user-on-centos-7/</url>
+    <content><![CDATA[<blockquote>
+<p>本文基于网络文章翻译转载<br>原文地址：<a href="https://www.rosehosting.com/blog/how-to-create-a-sudo-user-on-centos-7/">https://www.rosehosting.com/blog/how-to-create-a-sudo-user-on-centos-7/</a></p>
+</blockquote>
+<p>我们将指导你如何在CentOS 7中创建一个sudo用户。sudo是一个linux命令行程序，它允许你像超级用户一样执行命令。其配置文件提供详细的访问权限，包括仅从调用终端启用命令、每个用户或组需要密码、要求每次都重新输入密码，或者根本不需要密码。它还可以配置为允许传递参数或多个命令。在这个教程中，我们将演示如何在CentOS 7中创建一个sudo用户，只要遵循以下5个步骤，这是一个非常简单的任务。</p>
+<span id="more"></span>
+
+<p><strong>5个步骤将用户添加到sudo组：</strong></p>
+<h2 id="1-通过SSH连接"><a href="#1-通过SSH连接" class="headerlink" title="1. 通过SSH连接"></a>1. 通过SSH连接</h2><p>首先，通过SSH连接你的服务器。当你登录后，你需要添加一个新的系统用户。</p>
+<h2 id="2-在CentOS中添加一个新的系统用户"><a href="#2-在CentOS中添加一个新的系统用户" class="headerlink" title="2. 在CentOS中添加一个新的系统用户"></a>2. 在CentOS中添加一个新的系统用户</h2><p>你可以通过以下命令添加一个新的系统用户：</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line"># adduser newuser</span><br></pre></td></tr></table></figure>
+
+<p>你需要将 <code>newuser</code>替换成你想要添加的用户名。同时，你需要为这个新用户设置密码。</p>
+<h2 id="3-创建一个强密码"><a href="#3-创建一个强密码" class="headerlink" title="3. 创建一个强密码"></a>3. 创建一个强密码</h2><p>你可以通过以下密令设置密码：</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line"># passwd newuser</span><br></pre></td></tr></table></figure>
+
+<p>确保你使用强密码，否则密码无法通过字典检测。你会被要求再次输入密码，当你重新输入后会得到身份验证令牌更新成功的提示：</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line"># passwd newuser</span><br><span class="line">Changing password for user newuser.</span><br><span class="line">New password:</span><br><span class="line">Retype new password:</span><br><span class="line">passwd: all authentication tokens updated successfully.</span><br></pre></td></tr></table></figure>
+
+<h2 id="4-添加用户到Wheel组中"><a href="#4-添加用户到Wheel组中" class="headerlink" title="4. 添加用户到Wheel组中"></a>4. 添加用户到Wheel组中</h2><p>Wheel组是一个特殊的组，它允许组内的成员执行任何命令。因此，你需要将新用户添加到该组使得其可以像超级用户一样执行任何命令。你可以通过以下命令进行操作：</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line"># usermod -aG wheel newuser</span><br></pre></td></tr></table></figure>
+
+<p>再次强调，确保你用了正式的用户名替换了<code>newuser</code>。</p>
+<p>现在，用<code>visudo</code>命令打开并编辑<code>/etc/sudoers</code>文件。确保以<code>%wheel</code>开头的那一行没有被注释。内容大致与以下类似：</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">## Allows people in group wheel to run all commands</span><br><span class="line">%wheel  ALL=(ALL)       ALL</span><br></pre></td></tr></table></figure>
+
+<p>现在你的新用户已经设置完毕，你可以切换到该用户并测试一切是否正常。</p>
+<h2 id="5-切换到sudo用户"><a href="#5-切换到sudo用户" class="headerlink" title="5. 切换到sudo用户"></a>5. 切换到sudo用户</h2><p>通过以下命令，可以切换到新用户：</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line"># su - newuser</span><br></pre></td></tr></table></figure>
+
+<p>现在执行一条在常规用户下都不会执行成功的命令，如下：</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">$ ls -la /root/</span><br></pre></td></tr></table></figure>
+
+<p>你会得到以下错误信息：</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">ls: cannot open directory /root/: Permission denied</span><br></pre></td></tr></table></figure>
+
+<p>现在用<code>sudo</code>执行相同的命令：</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">$ sudo ls -ls /root/</span><br></pre></td></tr></table></figure>
+
+<p>你需要为新用户输入密码来处理。如果一切正常，该命令会列出<code>/root</code>目录下的内容。另外一种测试是执行以下命令：</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">$ sudo whoami</span><br></pre></td></tr></table></figure>
+
+<p>该命令的输出应该跟以下相同：</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">$ sudo whoami</span><br><span class="line">root</span><br></pre></td></tr></table></figure>
+
+<p>恭喜你，你现在拥有一个sudo用户可以管理你的CentOS 7操作系统了。</p>
+]]></content>
+      <categories>
+        <category>技术漫谈</category>
+      </categories>
+      <tags>
+        <tag>linux</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>Java日志框架生态</title>
+    <url>/posts/java-logging-frameworks/</url>
+    <content><![CDATA[<p>近期Log4j2的安全漏洞影响了全世界Java技术生态的大部分软件系统，在之后的几天发布了<a href="https://logging.apache.org/log4j/2.x/changes-report.html">若干个版本</a>修复安全漏洞。公司内部的框架近期也在逐步升级，供各业务团队直接使用，在这个过程中顺便梳理了下Java日志框架生态。很多同学分不清楚Log4j，Logback，SLF4j，Log4j2等框架，对于相关的依赖包简直是一头雾水，本文结合之前的一些记录，完整梳理了当前流行的日志框架及推荐使用方式。</p>
+<span id="more"></span>
+
+<h2 id="Java日志简史"><a href="#Java日志简史" class="headerlink" title="Java日志简史"></a>Java日志简史</h2><table>
+<thead>
+<tr>
+<th>时间</th>
+<th>事件</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>2002年2月</td>
+<td>JDK1.4发布，新增java.util.logging默认日志实现</td>
+</tr>
+<tr>
+<td>2005年11月</td>
+<td>Log4j发布1.1.3版本</td>
+</tr>
+<tr>
+<td>2006年08月</td>
+<td>Logback发布0.2.5版本</td>
+</tr>
+<tr>
+<td>2006年12月</td>
+<td>SLF4J发布正式版1.1.0版本</td>
+</tr>
+<tr>
+<td>2011年7月</td>
+<td>JBoss Logging发布3.0.0.GA版本</td>
+</tr>
+<tr>
+<td>2014年7月</td>
+<td>Log4j发布2.0版本</td>
+</tr>
+<tr>
+<td>2017年09月</td>
+<td>JDK9发布，新增System.Logger类</td>
+</tr>
+</tbody></table>
+<p>统计时间 2021年12月，其中版本数据来源于<a href="https://mvnrepository.com/">mvnrepository</a></p>
+<h2 id="日志框架设计"><a href="#日志框架设计" class="headerlink" title="日志框架设计"></a>日志框架设计</h2><p>不难想象，让进程输出自身内部状态的方法就是通过操作系统进程的标准输出与错误输出。为了更好的扩展日志的特性，如日志级别，分类存储，文件滚动等，在初期没有成熟的日志框架出现时大家纷纷各自实现，这在后续统一标准时带来了很多问题。接下来梳理当前Java生态的各类日志框架。</p>
+<h3 id="接口门面"><a href="#接口门面" class="headerlink" title="接口门面"></a>接口门面</h3><p>像SLF4j和Apache Commons Logging这类型属于日志门面，只定义了日志打印规范，相当于接口。其中Log4j2中的log4j-api也是这个作用，比较特别的是其定义了接口规范后，自己也做了相对应的实现，即log4j-core。</p>
+<p>门面的作用太重要了，这是<a href="https://en.wikipedia.org/wiki/SOLID">SOLID</a>六大设计原则之一<a href="https://en.wikipedia.org/wiki/Interface_segregation_principle">接口隔离</a>的典型代表。Java日志框架发展历史悠久，衍生了多种日志框架实现，有统一的日志框架接口，使得在应用在引用各类第三方依赖时不必纠结其使用了什么日志实现。</p>
+<p><strong>当前来看，SLF4J是接口门面的最好选择，大部分生态对对其进行了适配，选它就行了。</strong></p>
+<h3 id="具体实现"><a href="#具体实现" class="headerlink" title="具体实现"></a>具体实现</h3><p>接口有了就需要日志实现，Logback就是其中一个广泛使用的日志实现，它是与SLF4J同时期出现的产物，也来自于同一作者之手，目前也是Spring Boot生态默认的日志实现。</p>
+<p>2014年Log4j2诞生，成为了日志实现的又一选择，其最大的亮点是性能优势，Log4j2采用<a href="https://lmax-exchange.github.io/disruptor/">LMAX Disruptor</a>无锁内存队列实现。下图是来自于官方的<a href="https://logging.apache.org/log4j/2.x/performance.html">性能测试</a>的其中一张截图，在异步打印场景下其吞吐量特别高，吊打其他日志框架。为什么性能如此重要？在一些高QPS的服务，如果日志框架的性能不够强，会限制业务服务吞吐，还有可能影响业务应用，一个业务无关的日志记录器影响了业务服务稳定性，是非常不值得的。所以在后来，有很多Java应用开始尝试使用Log4j2作为其日志实现。</p>
+<p>除了Logback和Log4j2，还有想没有实现SLF4J的早期日志框架，如JDK内置的java.util.logging与Log4j，这些SLF4J额外做了一些适配包来适配，在下一部分会介绍到，不过不用太关注，因为不推荐这些作为日志实现。</p>
+<p><strong>尽管这次Log4j2安全漏洞席卷全球，但是如果再次选型日志实现，我还是推荐高性能的Log4j2。</strong></p>
+<p><img src="/images/java-logging-frameworks/image-20220105223228662.png" alt="image-20220105223228662"></p>
+<h3 id="日志适配"><a href="#日志适配" class="headerlink" title="日志适配"></a>日志适配</h3><p>当我们在开发应用时，会引用很多第三方组件，这些第三方组件来自不同的开发人员，他们使用不同的日志框架来打印日志。为了使得自己编写的代码中的日志打印与第三方组件的日志打印能够统一控制，我们可以选定某一种日志框架作为实现，而剩余的所有日志框架只需要在打印时适配转发路由到我们指定的日志框架就可以了。</p>
+<p><strong>简单来说，就是你选定某个日志框架后，剩余的其他日志框架适配工作就交给各个适配的依赖包来做就行了，你只需要选好正确的日志依赖即可。</strong>举个例子，比如你的项目确定使用Logback，而应用的一个X组件内部使用的是log4j，此时你可以考虑添加<code>log4j-over-slf4j</code>这个依赖包，让这个X组件用log4j打印的逻辑适配SLF4J，最终由Logback输出日志。</p>
+<h2 id="日志框架依赖"><a href="#日志框架依赖" class="headerlink" title="日志框架依赖"></a>日志框架依赖</h2><p>为了方便了解各个日志框架包之间的依赖关系，我梳理了一下这张图方便大家理解。</p>
+<ul>
+<li>图中红色字体的是日志门面的框架包，这类型的包在应用的classpath下无影响，其只是个接口。</li>
+<li>具体的日志实现包选择好其中一个就好，如图中四条红色的线对应了日志实现，建议选择Log4j2或Logback。</li>
+<li>其他的线就是一些日志适配包，选型日志实现后挑选一些需要的适配包依赖放到classpath下，做日志适配使用。</li>
+</ul>
+<p><img src="/images/java-logging-frameworks/logging-framework.png" alt="logging-framework"></p>
+<h2 id="最佳实践"><a href="#最佳实践" class="headerlink" title="最佳实践"></a>最佳实践</h2><p>日志框架不去了解清楚的话，确实会一头雾水，希望上文能帮助到你了解日志框架。这里罗列几个最佳实践：</p>
+<ul>
+<li>开发代码打印日志时，推荐使用SLF4J的api来打印日志，使得代码与具体的日志实现解耦</li>
+<li>开发SDK供他人使用时，不用传递依赖具体的日志实现，如log4j,logback,log4j-core等</li>
+<li>对于高性能场景，推荐使用SLF4J + Log4j2组合作为日志框架使用，并开启异步打印特性</li>
+<li>不要用多种日志实现，控制好日志适配包的使用避免循环依赖，使得启动时死循环导致栈溢出</li>
+<li>不要滥用日志打印，高频率打印日志落盘文件在日志归档压缩时会消耗cpu，影响业务系统运行</li>
+<li>不要滥用日志打印，在有日志收集的场景下，存储成本是昂贵的，只打印有价值的日志</li>
+<li>建议有统一的日志打印规范，可以参考下[Java开发手册](<a href="https://g/">https://g</a> ithub.com&#x2F;alibaba&#x2F;p3c&#x2F;blob&#x2F;master&#x2F;Java开发手册（嵩山版）.pdf)日志规约部分，建立自己团队内部的使用规范</li>
+</ul>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>以上介绍了Java日志框架的生态，相关历史大家可以自行了解下。最主要还是梳理好日志框架之间的关系，在开发过程中用好日志框架，避免依赖混乱给自己挖坑，开发SDK时也避免给别人挖坑。这些只是开头，日志框架看似简单，在高吞吐的服务打印的每一行日志都要认真思考，要保障服务的稳定性，你必须认真对待每一个细节。</p>
+<h2 id="References"><a href="#References" class="headerlink" title="References"></a>References</h2><ul>
+<li><a href="https://www.slf4j.org/">https://www.slf4j.org/</a></li>
+<li><a href="https://logback.qos.ch/">https://logback.qos.ch/</a></li>
+<li><a href="https://logging.apache.org/log4j/2.x/index.html">https://logging.apache.org/log4j/2.x/index.html</a></li>
+<li><a href="https://en.wikipedia.org/wiki/SOLID">https://en.wikipedia.org/wiki/SOLID</a></li>
+<li><a href="https://lmax-exchange.github.io/disruptor/">https://lmax-exchange.github.io/disruptor/</a></li>
+</ul>
+]]></content>
+      <categories>
+        <category>技术漫谈</category>
+      </categories>
+      <tags>
+        <tag>log</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>我的二零二二</title>
+    <url>/posts/my-2022/</url>
+    <content><![CDATA[<p>春节马上就到了，而我因为年底比较忙碌一直没抽出空来写下年终总结。2022 是个值得记录的一年，因为它很特别，我在这一年也经历了许多事情，希望还是停下脚步回望这过去的一年，在新的一年再接再厉，去实现自己想做的事。</p>
+<span id="more"></span>
+
+<h2 id="回顾-2022"><a href="#回顾-2022" class="headerlink" title="回顾 2022"></a>回顾 2022</h2><h3 id="结婚"><a href="#结婚" class="headerlink" title="结婚"></a>结婚</h3><p>时间来到 3 月下旬，发生了一起空难事故 <a href="https://zh.wikipedia.org/wiki/%E4%B8%AD%E5%9B%BD%E4%B8%9C%E6%96%B9%E8%88%AA%E7%A9%BA5735%E5%8F%B7%E7%8F%AD%E6%9C%BA%E7%A9%BA%E9%9A%BE">中国东方航空5735号班机空难</a>，看到这个新闻时，我们特别的震惊，心情难以平复，感慨人生是这么得不可预测，让我们更加珍惜眼前人。我俩从大学就开始认识，相处了 10 年了，一直没有结婚，这一路都是很不容易的，每次想起都觉得亏欠她太多。在 3 月 21 日的空难后，我们马上预约了民政局登记，在 3 月底我与我爱的人领了结婚证，我们没有什么忌讳，没有挑选什么特别的日子，就在那天结婚了。</p>
+<p>后来去补拍了婚纱照，由于期间有些不满意，拍了 3 次终于在年底出片了，最后还是很开心看到我们相册，因为这就是我们两人最美好的记忆。特别感谢老婆一直对我的理解包容，无条件对我的支持，感恩有你，在未来的每一天，我会好好照顾保护你，<strong>无论发生什么事情，我都会与你一起</strong>。</p>
+<h3 id="买车"><a href="#买车" class="headerlink" title="买车"></a>买车</h3><p>时间来到了 6 月，深圳的新能源补贴已经快截止了，国内这疫情政策对经济的影响太大了，政府为了刺激大家消费，出台了各种优惠政策和补贴。以前每次出游都是租了一辆小车，我俩一直在想拥有一台属于自己的车，只不过不知道是什么时候，总是有个声音说不要冲动消费，养车很贵等等。后来还是在优惠的刺激下改变了想法，作为理工男，选择里是少不了Tesla 这个选项的，最后因为价格，内饰，仪表盘还是理性放弃了，再看看今年年底 Tesla 大降价就没有后悔。最后我们买了热门的新能源混动 SUV，确实也是最适合我们的🚗。</p>
+<p>提车那天出来我还点恍惚，小心翼翼地开着新车在马路上，在红路灯路口我跟老婆说，“怎么感觉像我们以前出去玩刚租了车开出来的样子？”，她说，“哈哈，这是我们自己的车了！”。确实拥有了自己的车感觉很不一样，想去哪就去哪，我俩也一直说<strong>买新能源也是省不了钱的，买车最重要的就是提升生活质量</strong>。</p>
+<h3 id="旅行"><a href="#旅行" class="headerlink" title="旅行"></a>旅行</h3><p>时间来到了 9 月下旬，3 天婚假快过期了，今年的疫情也让人也压抑，于是连着国庆请了长假准备当作俩人的蜜月旅行。开始想着去新疆或西藏，最后还是疫情原因选择了放弃，我们想了想还没去过云南呢，但是总犹豫那里是否已经太商业化了，那样很难吸引我们。最后我们有了目的地，那就是神山——梅里雪山⛰️，刚好提车不久，想直接自驾过去碰碰运气，看看日照金山，然后幸运一整年😄。</p>
+<p>休假的前一天下班回家，收拾了行李，早早的就躺床上睡觉，准备明天一大早就出发。但是俩人太激动了，要开 2000+ 公里的长途旅行，一直无法入眠，然后一商量要不现在就出发，累了直接找个服务区休息。于是当前上完班的晚上 23 点我们就开始出发了，从深圳出发一路向西，路上两人还特别的精神兴奋，到凌晨三四点确实累的，找了个服务区休息到第二天早上又开始出发，穿过了广西到云南西南边一个服务区，由于不敢下高速，怕有行程码影响，我们就在服务区刷牙洗脸，在车里铺了个床好好睡了一晚。现在想想确实有点疯狂，以后得好好规划了，不能这么折腾身体。</p>
+<p>后来我们一路自驾经过昆明，大理，丽江，香格里拉，再到德钦，一路遇到许多特别有意思的人，也有许多美景，回想起来还是感觉特别的开心。在德钦我们第一晚到雾浓顶营地休息一晚，那晚很冷，感谢当时给我们煮上热腾腾的泡面的三位大佬，他们也是深圳出发的，三个企业合伙人开着大路虎出来自驾旅行三周。铺好床睡了一觉一早上起来只见营地的人都架好了三脚架等待卡瓦格博从云雾中露出来，可惜啥也看不到，此地果然名不虚传，确实是个雾浓顶。我们不甘心第二天找了酒店，在附近也踩了点，好好休息一晚后在凌晨五点就到了我们的位置，那是在飞来寺往下走一点的野生观景台，在大家还没起床，天还没亮的时候我们终于短暂地看到了卡瓦格博峰，真的太美太高了，<strong>夜空时深蓝色，卡瓦格博峰是雪白色</strong>，周围无一人，我俩躲在车里静静地看着。</p>
+<p>那天刚好是国庆，卡瓦格博峰藏了十几天终于在这一天露出了一点山峰，我们很幸运的看到了日照金山，而那天也并不是所有人都看到了，有些观景台还是啥也看不到，我们太幸运了也无悔了。准备开始返程，后来去了大理待了一晚就一路往东开，直到回家。一路开了近 6000 公里，文字太难以表达这趟旅程是多么的美妙。</p>
+<h3 id="健康"><a href="#健康" class="headerlink" title="健康"></a>健康</h3><p>健康永远是最重要的事情，身体是革命的本钱。今年还是有几个事情让我印象深刻：</p>
+<ol>
+<li>年初在公司的一次篮球活动中，抢完篮板后被一同事伸手掏钱，直接戳到我的右眼里，当时我戴了隐形眼镜，直接被戳成两半，一半在外面，一般在里面被眼皮盖住，当时我眼睛特别的难受，感觉啥也看不到，同时帮我把隐形眼镜取了出来，眼球都是红血丝，我愤怒的骂了那位同事，随后就去医院就诊。后来确认是<strong>眼角膜刮伤</strong>，医生说我是幸运的，开了药修养一段时间就会好。后来修养了一周，视力也恢复正常了，红血丝也消退了。</li>
+<li>另外一件事某个周五下班为了快点到附近的商场和老婆吃个饭，骑了个小黄车就过去了，那边刚下过毛毛雨，路面有点湿滑，在一个路口我轻轻的减速，但是由于小黄车刹车有问题，直接把前轮锁死，我人仰马翻直接扑街了，胸腔顶到了车头躺在地上短暂的喘不过气，随后爬了起来走路过去。在接下来的一周总感觉肋骨有点疼，我以为无大碍只是淤青之类的，后来去医院看了后才发现是<strong><strong>肋骨轻微骨折</strong></strong>，医生开了一些药，在后来的一两个月也慢慢恢复好了。</li>
+<li>在全国疫情政策改为全部开放后，我也难于幸免。在 12 月底某天下完班还挺精神的，晚上睡觉时测体温发现温度慢慢上涨，浑身发冷，到半夜烧到 38.5 度，我老婆也是那晚发烧，两天第二天一测，<strong>抗原阳性</strong>。最后高烧了三天，而后头痛了五天，这辈子没经过这么痛苦的发烧感冒，真的是头痛欲裂。高烧那几天多亏了老婆照顾，不然我都不知道一个人怎么扛过来。</li>
+</ol>
+<p>年底我也做了一次体检，体脂率过高，也有很多小毛病，过去一年锻炼太少了，新的一年多养养身，也要多健健身。</p>
+<h3 id="工作"><a href="#工作" class="headerlink" title="工作"></a>工作</h3><p>过去一年主要专注在服务观测和容器技术领域，我的一些认知也在慢慢发生变化。在应用领域有时候我们的想法会更加重要，商业化公司还是追求业务的成功，而非技术的成功，所以利用好技术红利，多想一些办法去成就公司业务会更加重要。我也意识到单枪匹马较难成就大的事情，所以在过去的一年我也尽量学会放下，很多事情明明自己做会更快，但是考虑长远一点，我会跟其他同学多做沟通，把控好架构方案，或者写好一些代码原型，引导大家一起把事情按照正确的方向去发展。</p>
+<p>那是不是技术细节就不太重要了呢？其实不然，多参与开源社区协作是我认为一种不错的方式，技术人在工作中多多少少都会接触一些开源项目，从社区中学习，从源码中学习，能参与到社区中协作，跟优秀的技术人沟通协作你会打开新世界，会有更多你没接触到的 idea，这些都能让你变得更加优秀。最后还是说一句，不要渴望公司来辅导培训你的技能，我们和企业是一种合作关系。学习是我们终身的事情，主动去让自己变得优秀那都是我们得事情，你帮助公司成就业务，公司也为我们学习提供了丰富的资源条件。</p>
+<p>在这里也感谢过去一年领导们给予的信任与机会，还有团队给力的小伙伴们鼎力支持，感恩与优秀的你们共事每一天。</p>
+<h3 id="开源"><a href="#开源" class="headerlink" title="开源"></a>开源</h3><p>今年仅做了些微小的贡献，目前我也逐步形成了自己的社区写作习惯，利用邮件驱动，我每天都会检查邮件列表的 issue 或 PR 讨论。新的一年我会抽更多个人时间来投入，因为我发现从社区学习真的很棒，社区能给你的东西是和企业不同的，在我看来，他们是一种互补关系。</p>
+<p><img src="/images/my-2022/image-20230121234122615.png" alt="image-20230121234122615"></p>
+<p>另外很高兴在年前获得了  CKAD 证书，去年立的 flag 一直拖延到现在。我在公司里一直推广容器化技术，这个证书对我来说还是有比较大的意义，最重要的是过程中的反复练习，让我的知识更加体系化结构化。</p>
+<p><img src="/images/my-2022/CKAD-nisiyong.png" alt="CKAD-nisiyong"></p>
+<h3 id="而立"><a href="#而立" class="headerlink" title="而立"></a>而立</h3><p>年底我也过了我的三十周岁，来到了而立之年，感谢老婆给我精心准备的庆祝。慢慢的需要承担的东西会更多，希望更加智慧地去迎接挑战。</p>
+<p>另外写给未来的自己，也许再看这文章时你已经 35 岁了，或 40 岁了，我无法预知你正在经历哪些事情，但是请你相信没有过不去的坎，关关难过关关过，珍惜眼前人。</p>
+<h2 id="展望-2023"><a href="#展望-2023" class="headerlink" title="展望 2023"></a>展望 2023</h2><p>新的一年我也有好多想做的事情，我觉得就不要立 flag 了，年后好好想一想自己想要成为什么样的人，该去做什么样的事情。</p>
+<p>最大的愿望是大家都平平安安，健健康康！剩下的听天命，尽人事。Stay hungry, Stay foolish!</p>
+]]></content>
+      <categories>
+        <category>成长感悟</category>
+      </categories>
+  </entry>
+  <entry>
+    <title>Pulsar消息处理模型</title>
+    <url>/posts/pulsar-messaging-model/</url>
+    <content><![CDATA[<p>Apache Pulsar是一款支持多租户，高性能的端到端的消息中间件。最早由Yahoo开发，目前该项目已经是Apache基金会的项目之一。当前世面上已经有一些优秀的消息中间件，如Kafka、RabbitMQ，RocketMQ等，为什么Pulsar还会横空出世？很多人对Pulsar有一些误解，认为这只是另一种消息传输方式而已，但每个新鲜事物的诞生，必定有其要解决的场景，了解其背后设计的动机是非常值得的。本文侧重点主要给大家介绍Pulsar的消息处理模型，其更多特性后续另外介绍。</p>
+<span id="more"></span>
+
+<h2 id="架构简述"><a href="#架构简述" class="headerlink" title="架构简述"></a>架构简述</h2><p>Puslar其中一个核心特性便是<strong>跨集群同步</strong>，所以在了解部署架构时需要考虑多集群的场景。以下简单介绍其中的关键组件：</p>
+<ul>
+<li><strong>Pulsar Producer：</strong>消息生产者。一般为生产消息的业务应用</li>
+<li><strong>Pulsar Consumer：</strong>消息消费者。一般为消费消息的业务应用</li>
+<li><strong>Pulsar Instance：</strong>Pulsar实例。一个实例可以包含一个或多个Pulsar集群。</li>
+<li><strong>Pulsar Cluster：</strong>Pulsar集群。包含了Broker计算节点，Bookie存储节点，以及集群内的Zookeeper协调器</li>
+<li><strong>Pulsar Broker：</strong>Broker计算节点。负责接收消息及路由消息，以及一些核心管理功能，无状态设计方便动态扩缩容。</li>
+<li><strong>Bookkeeper Bookie：</strong>消息存储节点。采用Apache Bookkeeper项目负责数据的高可用存储，并且很方便容量扩容。</li>
+<li><strong>Zookeeper：</strong>负责状态协调及元数据管理。集群内的zk负责集群内的节点数据及协调，全局的zk主要负责多集群相关的功能协调管理。</li>
+</ul>
+<p><img src="/images/pulsar-messaging-model/image-20211117234156852.png" alt="image-20211117234156852"></p>
+<h2 id="消息模型"><a href="#消息模型" class="headerlink" title="消息模型"></a>消息模型</h2><h3 id="批量消息"><a href="#批量消息" class="headerlink" title="批量消息"></a>批量消息</h3><p><strong>在某些场景下，每次单独发送一条消息效率太低了。为了解决这个问题，可以在发送端累积消息后合并这个一个请求，进行批量发送。</strong>在Pulsar里，当开启了批量消息的功能后，发送端累积的消息量超过一定的阈值后，会组合成一个批发送出去。在批量模式下，消息处理的过程中批是最小单位，到达消费端后消费者会把批解成多个消息，在单独消费。但是在延时消息的场景下，消息仍然会被单独处理。</p>
+<p>通常来说批量处理有个问题，在消费端处理一批消息时有部分消息没有处理成功（处理失败或超过ACK时间），此时会将这批消息NACK，等待下一次重新投递时再次消费，再次处理这个批时会重新消费已经处理过的消息。Pulsar为了避免重复消费同一批消息中已经处理成功的部分消息，维护了一个batch index，记录了这一批消息已经消费成功的消息，并返回给broker端。broker端维护了这个batch index，已经确认过的消息不会再次投递，当这个batch index的所有消息都确认成功后才会移除这个一批消息。</p>
+<p><img src="/images/pulsar-messaging-model/image-20211117221342504.png" alt="image-20211117221342504"></p>
+<h3 id="分片消息"><a href="#分片消息" class="headerlink" title="分片消息"></a>分片消息</h3><p><strong>在某些场景下，单条消息过大服务端会拒绝接收导致客户端发送失败。</strong>Pulsar默认消息体最大限制为5MB，当消息体过大时可以采用分块处理（chucking）。在发送端，当消息体大小超过最大限制时会进行分块切片，并分别发送每一块，及分片元数据信息到broker端。在消费端，需要暂时缓存分块数据在内存里，等待所有分块到齐后再进行组装成一个完整的消息体，然后进入消费端的接收队列中。需要注意的是，如果发送端没有成功发送所有分块，消费端在规定时间后会将这些未完整的分片标记为过期，默认过期时间为1小时。</p>
+<p>当消费端成功消费完一个由分片组装当消息后并发送ACK，在消费端内部跟这个消息相关的分片也会标记为已ACK状态。为了避免分片暂用过多内存，Pulsar消费端还可以设置参数<code>maxPendingChunkedMessage</code>来控制消费端能缓存的分片数，当超过这个阈值后，消费端可以发送ACK并自动删除未组装完整的消息，或着发送NACK告诉broker端稍后再消费此消息。</p>
+<p><strong>一个生产者与一个顺序消费的消费者的分块消息处理</strong></p>
+<p><img src="/images/pulsar-messaging-model/image-20211117221727373.png" alt="image-20211117221727373"></p>
+<p>多个<strong>生产者与一个顺序消费的消费者的分块消息处理</strong></p>
+<p><img src="/images/pulsar-messaging-model/image-20211117221736860.png" alt="image-20211117221736860"></p>
+<h3 id="Topic的写入模式"><a href="#Topic的写入模式" class="headerlink" title="Topic的写入模式"></a>Topic的写入模式</h3><p>生产者在往Topic发送消息时，有3种访问模式（Access Mode）可以设置：</p>
+<p><strong>1）Shared</strong></p>
+<p>多个生产者都可以往同一个topic发送。这是<code>默认</code>设置。</p>
+<p><strong>2）Exclusive</strong></p>
+<p>在一个topic上，只有一个生产者可以发送消息。如果已经有一个生产者成功连上这个topic，其他生产者再访问这个topic会<code>快速失败</code>。</p>
+<p>只有该生产者与broker端形成<code>网络分区</code>时，才会会驱逐，这时候才有可能让其他生产者连接这个topic。</p>
+<p>这种方式类似下文的 <em>Pulsar的Topic订阅模式</em>中的exclusive模式。</p>
+<p><strong>3）WaitForExclusive</strong></p>
+<p>同Exclusive一样，一个topic只能有一个生产者访问。如果该topic已经被一个生产者连接暂用，则其他都生产者的创建会<code>挂起等待</code>，直到其中一个有访问这个topic的权限。</p>
+<h3 id="Topic的订阅模式"><a href="#Topic的订阅模式" class="headerlink" title="Topic的订阅模式"></a>Topic的订阅模式</h3><p><strong>在Topic与Consumer之前还有一个Subscription的概念</strong>。一个Topic可以与多个订阅绑定，满足的不同的消费者的订阅需求。多个订阅一般是在有不同的消费者需要消费同一分消息的情况下。</p>
+<p><img src="/images/pulsar-messaging-model/image-20211117233852488.png" alt="image-20211117233852488"></p>
+<p>为了灵活的控制消息投递，满足各类场景。Pulsar目前支持4种订阅模式（Subscription）：</p>
+<p><strong>1）Exclusive</strong></p>
+<p>在这种模式下，只有一个消费者实例能关联这个订阅，其他消费者再关联会<code>立即失败</code>。这点与上文的<em>Pulsar的Topic访问模式</em>的Exclusive模式类似。</p>
+<p><img src="/images/pulsar-messaging-model/image-20211117233926645.png" alt="image-20211117233926645"></p>
+<p><strong>2）Failover</strong></p>
+<p>在这种模式下，可以有多个消费者实例能关联这个订阅，其中只有有1个消费者会成为master消费消息，当master实例了，才会切换到其他消费者。这种方式类似<em>Pulsar的Topic访问模式</em> 的WaitForExclusive，这里有<code>自动选主</code>的机制。</p>
+<p><img src="/images/pulsar-messaging-model/image-20211118000747152.png" alt="image-20211118000747152"></p>
+<p><strong>3）Shared</strong></p>
+<p>在这种模式下，绑定到同一个订阅的消费者会消费到同一个topic的消息，并且1条消息只会路由给其中一个消费者实例。这里默认的路由方式是<code>轮询</code>，这是一种<code>负载均衡</code>。注意在这种模式下不支持<strong>顺序消息</strong>，也不能<strong>累计确认</strong>。</p>
+<p><img src="/images/pulsar-messaging-model/image-20211117234013565.png" alt="image-20211117234013565"></p>
+<p><strong>4）Key_Shared</strong></p>
+<p>在这种模式下，绑定到统一订阅的消费者可以消费同一个topic的消息，与Shared模式不同的是，这里并不是轮询投递消息，格式根据消息体设置的Key来进行路由，同一个Key的会路由到同一个消费者实例。如果这个消费者实例失联了，这次会触发其他消费者承继消费。可以理解为这是基于<code>Hash</code>的一种<code>负载均衡</code>。</p>
+<p><img src="/images/pulsar-messaging-model/image-20211117234036187.png" alt="image-20211117234036187"></p>
+<h3 id="分区Topic"><a href="#分区Topic" class="headerlink" title="分区Topic"></a>分区Topic</h3><p>常规的Topic只会在1个broker节点上，这会限制这个topic的吞吐。分区Topic将常规的Topic拆分成多个Partition，并存在多个broker上，这能够提升这个Topic的吞吐量。当消息在发送的时候，会路由到某个broker上，在消费端会自动分配分区主题给消费者。</p>
+<p><img src="/images/pulsar-messaging-model/image-20211117234048787.png" alt="image-20211117234048787"></p>
+<p><strong>路由方式</strong></p>
+<ol>
+<li>RoundRobinPartition： 轮询方式。如果消息没有指定key，会轮询发送到各分区，注意不是单个消息轮询，而是跟批的数量保持一致，已保证批处理的高效性；如果指定了key，会hash到对应的分区。</li>
+<li>SinglePartition：单个分区。如果没有指定key，会随机挑选一个分区发送；如果指定key，会hash到对应的分区。</li>
+<li>CustomPartition：自定义策略，支持扩展。</li>
+</ol>
+<p><strong>顺序保证</strong></p>
+<p>消息的顺序依赖<strong>路由方式</strong>及<strong>消息key</strong>的设置。顺序有两种方式：</p>
+<ol>
+<li>Per-key-partition：同一个key的消息会路由到同一个分区，保证顺序。支持RoundRobinPartition模式与SinglePartition模式</li>
+<li>Per-producer：同一个生产者的消息会路由到同一个分区，保证顺序。支持SinglePartition模式</li>
+</ol>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>本文主要简单的介绍了Pulsar的消息处理模型，不同于Kafka或RocketMQ的Broker，Pulsar Broker没有存储消息数据，使得其功能特性变得更加的强大且清晰灵活。类似分片处理这种特性在很多消息中间件都没有支持到，在Pulsar却可以灵活支持。文章的消息处理模型有助于在开发过程中对一些概念的理解，在实现原理有总体的认识，再深入部分功能细节就方便得多。本文主要参考官方英文文档，一些使用细节可以自行了解。</p>
+<h2 id="References"><a href="#References" class="headerlink" title="References"></a>References</h2><ul>
+<li><a href="https://pulsar.apache.org/docs/en/concepts-messaging/">https://pulsar.apache.org/docs/en/concepts-messaging/</a></li>
+<li><a href="https://pulsar.apache.org/docs/en/concepts-architecture-overview/">https://pulsar.apache.org/docs/en/concepts-architecture-overview/</a></li>
+</ul>
+]]></content>
+      <categories>
+        <category>技术漫谈</category>
+      </categories>
+      <tags>
+        <tag>pulsar</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>RocketMQ存储设计剖析</title>
+    <url>/posts/rocketmq-store-design/</url>
+    <content><![CDATA[<p>最近在内部准备一个消息中间件的实践分享，顺便整理下RocketMQ的存储设计。存储设计是整个Broker最为重要的部分之一，好比你着手了解一个业务系统的逻辑时，如果先了解其DB表结构设计，再去理解业务代码逻辑就容易的多了。本文通过本地实验及相关文档参考，整理其核心概念的存储设计。</p>
+<span id="more"></span>
+
+<h2 id="存储流程简介"><a href="#存储流程简介" class="headerlink" title="存储流程简介"></a>存储流程简介</h2><p><img src="/images/rocketmq-store-design/image-20211205163509696.png" alt="image-20211205163509696"></p>
+<p>首先结合官方文档的图片对消息存储的流程有个大致的了解：</p>
+<ol>
+<li><p>所有生产者都会往Broker指定的Topic发消息，在Broker收到消息后，无论消息属于哪个Topic，都会封装成一个标准格式后追加存储到一个<code>CommitLog</code>文件上。</p>
+</li>
+<li><p>存到到CommitLog文件后Broker会将这条消息在<code>CommitLog</code>的物理位置追加存储到一个<code>ConsumeQueue</code>的文件上，每个Topic都有多个<code>ConsumeQueue</code>，默认Broker在追加存储时会轮询这个Topic下的所有<code>ConsumeQueue</code>文件。</p>
+</li>
+</ol>
+<p>通过以上了解可以得知，其实CommitLog是消息的<strong>物理存储</strong>，而ConsumeQueue是消息的<strong>逻辑存储</strong>，类似于索引文件。另外在RocketMQ还提供了消息Key查询的功能特性，其实现也是在消息持久化后生成的索引文件IndexFile，在上图没有所有说明。</p>
+<h2 id="存储目录结构"><a href="#存储目录结构" class="headerlink" title="存储目录结构"></a>存储目录结构</h2><p>RocketMQ的每个Broker启动后，会创建相应的存储目录来存储消息，默认目录在<code>~/store</code>，以下为其存储层级结构：</p>
+<figure class="highlight bash"><table><tr><td class="code"><pre><span class="line">store</span><br><span class="line">├── abort</span><br><span class="line">├── checkpoint</span><br><span class="line">├── commitlog</span><br><span class="line">│   ├── 00000000000000000000</span><br><span class="line">│   └── 00000000001073741824</span><br><span class="line">├── config</span><br><span class="line">│   ├── consumerFilter.json</span><br><span class="line">│   ├── consumerFilter.json.bak</span><br><span class="line">│   ├── consumerOffset.json</span><br><span class="line">│   ├── consumerOffset.json.bak</span><br><span class="line">│   ├── delayOffset.json</span><br><span class="line">│   ├── delayOffset.json.bak</span><br><span class="line">│   ├── subscriptionGroup.json</span><br><span class="line">│   ├── topics.json</span><br><span class="line">│   └── topics.json.bak</span><br><span class="line">├── consumequeue</span><br><span class="line">│   └── TopicTest</span><br><span class="line">│       ├── 0</span><br><span class="line">│       │   └── 00000000000000000000</span><br><span class="line">│       ├── 1</span><br><span class="line">│       │   └── 00000000000000000000</span><br><span class="line">│       ├── 2</span><br><span class="line">│       │   └── 00000000000000000000</span><br><span class="line">│       └── 3</span><br><span class="line">│           └── 00000000000000000000</span><br><span class="line">├── index</span><br><span class="line">│   └── 20211204001412810</span><br><span class="line">└── lock</span><br></pre></td></tr></table></figure>
+
+<h2 id="CommitLog设计"><a href="#CommitLog设计" class="headerlink" title="CommitLog设计"></a>CommitLog设计</h2><p>CommitLog是一种常见的设计思想，相关内容可以通过Martin Fowler的<a href="https://martinfowler.com/articles/patterns-of-distributed-systems/wal.html">Write-Ahead Log</a>了解，RocketMQ的CommitLog设计在里面都有相应的体现，如：1）为了防止单个CommitLog文件过大，RocketMQ对CommitLog文件做了分段拆分，默认1个文件为1GB。2）为了防止CommitLog文件无限追加导致存储不足，RocketMQ默认值保留3天的数据，超期的CommitLog会被清理删除。</p>
+<p>CommitLog每个文件都以字节的offset来命名，从0开始（固定长度，左边做0填充），如第2个文件名可以通过计算获得，依此类推。</p>
+<blockquote>
+<p>1GB &#x3D; 1 * 1024 * 1024 * 1024 Byte &#x3D; 1073741824 Byte</p>
+</blockquote>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">➜  ll store/commitlog</span><br><span class="line">total 376</span><br><span class="line">-rw-r--r--  1 nisiyong  staff   1.0G Dec  4 00:14 00000000000000000000</span><br><span class="line">-rw-r--r--  1 nisiyong  staff   1.0G Dec  4 00:14 00000000001073741824</span><br></pre></td></tr></table></figure>
+
+<p>每条消息的编码格式如下表格，并追加到对应的CommitLog文件上，通过表格可得知每条消息的其中的固定部分占90个字节。</p>
+<table>
+<thead>
+<tr>
+<th>顺序</th>
+<th>字段名称</th>
+<th>数据类型</th>
+<th>字节数</th>
+<th>字段说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td>MsgLength</td>
+<td>Int</td>
+<td>4</td>
+<td>消息总长度</td>
+</tr>
+<tr>
+<td>2</td>
+<td>MagicCode</td>
+<td>Int</td>
+<td>4</td>
+<td>魔数，固定值0xdaa320a7</td>
+</tr>
+<tr>
+<td>3</td>
+<td>BodyCrc</td>
+<td>Int</td>
+<td>4</td>
+<td>消息内容CRC校验码</td>
+</tr>
+<tr>
+<td>4</td>
+<td>QueueId</td>
+<td>Int</td>
+<td>4</td>
+<td>消息的ConsumeQueue的ID</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Flag</td>
+<td>Int</td>
+<td>4</td>
+<td>消息FLAG，RocketMQ不做处理，供应用程序使用</td>
+</tr>
+<tr>
+<td>6</td>
+<td>QueueOffset</td>
+<td>Long</td>
+<td>8</td>
+<td>消息在ConsumeQueue上的偏移量</td>
+</tr>
+<tr>
+<td>7</td>
+<td>PhysicalOffset</td>
+<td>Long</td>
+<td>8</td>
+<td>消息在CommitLog上的偏移量</td>
+</tr>
+<tr>
+<td>8</td>
+<td>SysFlag</td>
+<td>Int</td>
+<td>4</td>
+<td>消息系统FLAG，如是否压缩，是否为消息等</td>
+</tr>
+<tr>
+<td>9</td>
+<td>BornTimestamp</td>
+<td>Long</td>
+<td>8</td>
+<td>消息在客户端的生成的时间</td>
+</tr>
+<tr>
+<td>10</td>
+<td>BornHost</td>
+<td>Long</td>
+<td>8</td>
+<td>消息在客户端的IP:PORT</td>
+</tr>
+<tr>
+<td>11</td>
+<td>StoreTimestamp</td>
+<td>Long</td>
+<td>8</td>
+<td>消息在服务端Broker的存储时间</td>
+</tr>
+<tr>
+<td>12</td>
+<td>StoreHost</td>
+<td>Long</td>
+<td>8</td>
+<td>消息在服务端Broker的IP:PORT</td>
+</tr>
+<tr>
+<td>13</td>
+<td>ReconsumeTimes</td>
+<td>Int</td>
+<td>4</td>
+<td>消息的重试次数</td>
+</tr>
+<tr>
+<td>14</td>
+<td>PrepareTransactionOffset</td>
+<td>Long</td>
+<td>8</td>
+<td>事物消息的偏移量</td>
+</tr>
+<tr>
+<td>15</td>
+<td>BodyLength</td>
+<td>Int</td>
+<td>4</td>
+<td>消息体的长度</td>
+</tr>
+<tr>
+<td>16</td>
+<td>Body</td>
+<td>byte[]</td>
+<td>array size</td>
+<td>消息内容</td>
+</tr>
+<tr>
+<td>17</td>
+<td>TopicLength</td>
+<td>byte</td>
+<td>1</td>
+<td>Topic的长度</td>
+</tr>
+<tr>
+<td>18</td>
+<td>Topic</td>
+<td>byte[]</td>
+<td>array size</td>
+<td>Topic名称</td>
+</tr>
+<tr>
+<td>19</td>
+<td>PropertiesLength</td>
+<td>byte</td>
+<td>1</td>
+<td>扩展属性长度</td>
+</tr>
+<tr>
+<td>20</td>
+<td>Properties</td>
+<td>byte[]</td>
+<td>array size</td>
+<td>扩展属性内容</td>
+</tr>
+</tbody></table>
+<p>如下是本地磁盘的通过<code>xxd</code>命令获取的commitlog二进制文本信息，通过魔数<code>daa320a7</code>可以区分出每一条消息的大致位置。<img src="/images/rocketmq-store-design/image-20211205171926534.png" alt="image-20211205171926534"></p>
+<h2 id="ConsumeQueue设计"><a href="#ConsumeQueue设计" class="headerlink" title="ConsumeQueue设计"></a>ConsumeQueue设计</h2><p>RocketMQ创建Topic时都会指定需要几个Queue，这些Queue会均衡的分配到各个Broker服务器上。Queue在Topic目录下，名称也类似commitlog按offset来命名。</p>
+<p>ConsumeQueue文件主要存储消息的摘要信息，在commitlog之上多了一层逻辑层抽象，便于Topic隔离维护等</p>
+<p>默认1个ConsumeQueue文件包含30w个条目，每个条目大小固定共20个字节，结构如下：</p>
+<table>
+<thead>
+<tr>
+<th>顺序</th>
+<th>字段名称</th>
+<th>数据类型</th>
+<th>字节数</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td>CommitLogOffset</td>
+<td>Long</td>
+<td>8</td>
+</tr>
+<tr>
+<td>2</td>
+<td>MsgLength</td>
+<td>Int</td>
+<td>4</td>
+</tr>
+<tr>
+<td>3</td>
+<td>TagHashCode</td>
+<td>Long</td>
+<td>8</td>
+</tr>
+</tbody></table>
+<p>通过计算可得知1个ConsumeQueue文件写满后大小约<code>5.7MB</code></p>
+<figure class="highlight bash"><table><tr><td class="code"><pre><span class="line">➜  ll store/consumequeue/TopicTest/0</span><br><span class="line">total 11720</span><br><span class="line">-rw-r--r--  1 nisiyong  staff   5.7M Dec  4 00:14 00000000000000000000</span><br></pre></td></tr></table></figure>
+
+<h2 id="IndexFile设计"><a href="#IndexFile设计" class="headerlink" title="IndexFile设计"></a>IndexFile设计</h2><p>RocketMQ为了方便消息检索，支持了用户在发送消息时设置自定的Key，消息在服务端根据Key进行索引构建，在后续的控制台可以通过该Key来查询该消息。</p>
+<p>Broker端的IndexFile就是这些Key的索引文件，与上述的文件命名不同，IndexFile是更加时间戳来命名的，方便后续结合时间维度来查询。每个IndexFile由以下3部分组成：</p>
+<ul>
+<li>IndexHeader，共40个字节</li>
+<li>SlotTable，每个Slot占4个字节，存放消息Key的hashCode，默认1个IndexFile有500w个Slot</li>
+<li>IndexItems，每个IndexItem占20个字节，默认1个IndexFile有2000w个IndexItem</li>
+</ul>
+<p>通过计算可得知1个Index文件写满后大小约<code>401MB</code></p>
+<figure class="highlight bash"><table><tr><td class="code"><pre><span class="line">➜  ll store/index</span><br><span class="line">total 39104</span><br><span class="line">-rw-r--r--  1 nisiyong  staff   401M Dec  5 00:57 20211204001412810</span><br></pre></td></tr></table></figure>
+
+<p>固定40个字节的IndexHeader结构如下：</p>
+<table>
+<thead>
+<tr>
+<th>顺序</th>
+<th>字段名称</th>
+<th>数据类型</th>
+<th>字节数</th>
+<th>字段说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td>BeginTimestamp</td>
+<td>Long</td>
+<td>8</td>
+<td>该索引文件内消息的最小存储时间</td>
+</tr>
+<tr>
+<td>2</td>
+<td>EndTimestamp</td>
+<td>Long</td>
+<td>8</td>
+<td>该索引文件内消息的最大存储时间</td>
+</tr>
+<tr>
+<td>3</td>
+<td>BeginPhyoffset</td>
+<td>Long</td>
+<td>8</td>
+<td>该索引文件内消息的最小CommitLog Offset</td>
+</tr>
+<tr>
+<td>4</td>
+<td>EndPhyoffset</td>
+<td>Long</td>
+<td>8</td>
+<td>该索引文件内消息的最大CommitLog Offset</td>
+</tr>
+<tr>
+<td>5</td>
+<td>HashSlotCount</td>
+<td>Int</td>
+<td>4</td>
+<td>该索引文件的Slot数量，默认500w个</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Index</td>
+<td>Int</td>
+<td>4</td>
+<td>该索引文件的IndexItem数量，默认2000w个</td>
+</tr>
+</tbody></table>
+<p>每个IndexItem的结构如下：</p>
+<table>
+<thead>
+<tr>
+<th>顺序</th>
+<th>字段名称</th>
+<th>数据类型</th>
+<th>字节数</th>
+<th>字段说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td>HashCode</td>
+<td>Int</td>
+<td>4</td>
+<td>消息Key字符串的HashCode</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Phyoffset</td>
+<td>Long</td>
+<td>8</td>
+<td>消息的ComimitLog Offset</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Timediff</td>
+<td>Int</td>
+<td>4</td>
+<td>与第一条消息的时间错差值，小于0该消息无效</td>
+</tr>
+<tr>
+<td>4</td>
+<td>PreIndexNo</td>
+<td>Int</td>
+<td>4</td>
+<td>上一条消息的IndexItem的索引，出现Hash碰撞时，形成链表结构</td>
+</tr>
+</tbody></table>
+<p>IndexFile存储过程简单说明下，结合下图重点关注以下几点：</p>
+<ul>
+<li>每条消息的Key都能计算出一个4个字节Int类型的HashCode，通过该HashCod%500w得到slot的位置</li>
+<li>每条消息的信息可以生成一个IndexItem，只要IndexItems有空间，就直接追加存放，并把该IndexItem的位置索引存放到对应的slot上</li>
+<li>当出现hash碰撞时，新的IndexItem需要记录上一个slot的IndexItem位置，然后用新的IndexItem的位置覆盖到slot的位置</li>
+</ul>
+<p><img src="/images/rocketmq-store-design/image-20211205223634676.png" alt="image-20211205223634676"></p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>至此RocketMQ消息在服务端的存储设计及相关数据结构已经介绍完毕，由于篇幅关系只介绍了消息生产写入的逻辑，而消费端如何消费读取消息，以及消费的进度位点没有详细介绍，这块大家可以结合<code>store/config/consumerOffset.json</code>文件内容进行了解，逻辑比较简单。总体来看，对存储的数据结构有较为清晰的了解对实际使用时帮助比较大，后续在学习一些复杂的中间件时先从总体关注其核心功能设计，再逐步去了解局部的功能逻辑。</p>
+<h2 id="References"><a href="#References" class="headerlink" title="References"></a>References</h2><ul>
+<li><a href="https://github.com/apache/rocketmq/blob/master/docs/cn/design.md">https://github.com/apache/rocketmq/blob/master/docs/cn/design.md</a></li>
+<li><a href="https://martinfowler.com/articles/patterns-of-distributed-systems/wal.html">https://martinfowler.com/articles/patterns-of-distributed-systems/wal.html</a></li>
+</ul>
+]]></content>
+      <categories>
+        <category>技术漫谈</category>
+      </categories>
+      <tags>
+        <tag>rocketmq</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>使用Rancher快速搭建Kubernetes集群</title>
+    <url>/posts/setup-kubernetes-cluster-in-rancher/</url>
+    <content><![CDATA[<p>最早在推动公司应用容器化过程一直使用内部的容器云平台，由于内部的容器云平台做了一层封装，对 Kubernetes 一些原生的功能开放性不足。近期准备调研 Service Mesh，需要一套干净的 Kubernetes 集群作为 POC 环境做测试，通过查找一些资料，最终选择了用 Rancher 来搭建 Kubernetes，花了半天就搭建完成了。现在搭建一套 Kubernetes 集群来测试学习还是挺方便的，这里做些记录分享，尽管这类型的内容比较容易过时，还是希望对读者有些帮助。</p>
+<span id="more"></span>
+
+<h2 id="预备知识"><a href="#预备知识" class="headerlink" title="预备知识"></a>预备知识</h2><h3 id="Kubernetes组件"><a href="#Kubernetes组件" class="headerlink" title="Kubernetes组件"></a>Kubernetes组件</h3><p>通过官方文档 <a href="https://kubernetes.io/docs/concepts/overview/components/">Kubernetes Components</a> 可以了解到1个 Kubernetes 集群通常用多个节点组成，这些节点主要分为两类：</p>
+<ol>
+<li><strong>Control Plane 节点</strong>：Control Plane 节点包含许多组件，主要负责整个集群的决策，管理所有 Worker 节点，响应处理集群的事件等等。为了高可用一般都会部署多个 Control Plane 节点，并且相关的组件一般部署在同一台服务器上。</li>
+<li><strong>Worker 节点</strong>：主要包含 kubelet 组件和 kube-proxy 组件，一般会有多个节点，kubelet 与 Control Plane 的 API server 交互，负责处理 Worker Node 的所有 Pod，而 kube-proxy 则负责该节点的网络规则，流量转发等。</li>
+</ol>
+<p>以下是官方的架构概览图，可以通过官方文档详细了解。</p>
+<p><img src="/images/setup-kubernetes-cluster-in-rancher/image-20220209142312578.png" alt="image-20220209142312578"></p>
+<h3 id="Rancher架构"><a href="#Rancher架构" class="headerlink" title="Rancher架构"></a>Rancher架构</h3><p>Rancher 是在 Kubernetes 之上更加抽象的一个平台，它让企业更加方便地构建 Kubernetes 集群，用户可以通过 Rancher Kubernetes Engine (RKE) 以图形化的方式快速搭建多个 Kubernetes 集群，还可以结合云厂商的来创建集群等等。用户搭建一个 Rancher Server 就可以标准化地管理多个 Kubernetes 集群，这很大程度上节省了大量的运维成本。</p>
+<p>Rancher Server 的部署方式可以分为两种：</p>
+<ol>
+<li><strong>集群部署</strong>：在生产环境推荐这种使用高可用集群方式部署，Rancher 管理着多个 Kubernetes 集群的，自身的可用性需要做好保障。使用集群部署的方式一般是在一个已有的 Kubernetes 集群上部署，建议这个 Kubernetes 集群专门用来部署 Rancher。</li>
+<li><strong>单节点部署</strong>：在开发测试环境资源有限的情况下，可以在一台安装有 Docker 环境的服务器上，快速搭建单节点的 Rancher，再通过 Rancher 管理多台服务器来创建 Kubernetes 集群。</li>
+</ol>
+<blockquote>
+<p>先搭建 Rancher 后再搭建 Kubernetes，还是先搭建 Kubernetes 再搭建 Rancher？这个问题有点像“鸡生蛋还是蛋生鸡”，一开始我也有点困惑。但是如果在生产环境操作，就强烈建议先有一套专门的小 Kubernetes 集群来部署 Rancher。</p>
+</blockquote>
+<p>以下是官方Rancher的架构图，可以结合官方文档熟悉了解。<a href="https://rancher.com/docs/rancher/v2.0-v2.4/en/overview/architecture/">Rancher Server Architecture</a></p>
+<p><img src="/images/setup-kubernetes-cluster-in-rancher/image-20220209141942864.png" alt="image-20220209141942864"></p>
+<h2 id="部署步骤"><a href="#部署步骤" class="headerlink" title="部署步骤"></a>部署步骤</h2><p>由于这里搭建 Kubernetes 集群主要是为了开发测试使用，固采用简单的单节点 Docker 的方式来部署 Rancher，Kubernetes 集群则采用3个节点集群的高可用方式来部署。</p>
+<h3 id="准备3台虚拟机"><a href="#准备3台虚拟机" class="headerlink" title="准备3台虚拟机"></a>准备3台虚拟机</h3><ul>
+<li>10.0.0.1：计划安装单机版 Rancher，并作为 Kubernetes 集群的 Control Plane 节点</li>
+<li>10.0.0.2：作为 Kubernetes 集群的 Worker 节点</li>
+<li>10.0.0.3：作为 Kubernetes 集群的 Worker 节点</li>
+</ul>
+<p><strong>相关说明</strong></p>
+<ol>
+<li>以上3台机器均为8核16G，使用 CentOS 7 操作系统</li>
+<li>注意必须禁用交换内存，注释 <code>/etc/fstab</code> 含 swap 关键字的行后重启机器即可</li>
+<li>注意3台机器的 hostname 需要设置成不一样，修改 <code>/etc/hostname</code> 即可</li>
+<li>更多前期准备可以参考 <a href="https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/#before-you-begin">Installing kubeadm#Before you begin</a>。</li>
+</ol>
+<h3 id="安装Docker"><a href="#安装Docker" class="headerlink" title="安装Docker"></a>安装Docker</h3><p>目前使用 Docker 作为容器运行时，分别在3台机器上安装 Docker，安装过程非常简单，自行参照官方文档进行安装。<a href="https://docs.docker.com/engine/install/centos/">Install Docker Engine</a></p>
+<p>安装完毕后启动 Docker 并设置默认开机启动 Docker，执行以下命令：</p>
+<figure class="highlight bash"><table><tr><td class="code"><pre><span class="line">systemctl start docker</span><br><span class="line">systemctl <span class="built_in">enable</span> docker</span><br></pre></td></tr></table></figure>
+
+<h3 id="安装Rancher"><a href="#安装Rancher" class="headerlink" title="安装Rancher"></a>安装Rancher</h3><p>参照官网文档 <a href="https://rancher.com/docs/rancher/v2.0-v2.4/en/installation/other-installation-methods/single-node-docker/">Installing Rancher on a Single Node Using Docker</a> 的第一种方式，当然最好指定下版本号，如我使用 <code>rancher/rancher:v2.5.12</code>。</p>
+<figure class="highlight bash"><table><tr><td class="code"><pre><span class="line">docker run -d --name rancher --restart=unless-stopped \</span><br><span class="line">  -p 80:80 -p 443:443 \</span><br><span class="line">  rancher/rancher:v2.5.12</span><br></pre></td></tr></table></figure>
+
+<p>可以通过 <code>docker logs -f rancher</code> 查看标准输出日志，等待一段时间初始化完毕后就可以打开浏览器访问网页 <a href="http://10.0.0.1/">http://10.0.0.1</a> 。设置下admin密码后就可以开始使用 Rancher 管理端了。</p>
+<h3 id="创建-Kubertetes-集群"><a href="#创建-Kubertetes-集群" class="headerlink" title="创建 Kubertetes 集群"></a>创建 Kubertetes 集群</h3><p>Rancher 创建 Kubernetes 集群也非常多傻瓜式，这里不重复细节，依据官方文档设置来即可。<a href="https://rancher.com/docs/rancher/v2.6/en/quick-start-guide/deployment/quickstart-manual-setup/">Rancher Manual Quick Start</a></p>
+<p><img src="/images/setup-kubernetes-cluster-in-rancher/image-20220209174214150.png" alt="image-20220209174214150"></p>
+<p>勾选Kubernetes 的节点角色后 Rancher 会生成一些命令，直接拷贝命令到对应的机器运行。在这里提供下我节点角色的分配以供参考：</p>
+<ul>
+<li>10.0.0.1: etcd, Control Plane, Worker</li>
+<li>10.0.0.2: Worker</li>
+<li>10.0.0.3: Worker</li>
+</ul>
+<p>等待各个节点的初始化完成注册后，在 Rancher 就可以看到集群已经就绪可用的状态。</p>
+<p><img src="/images/setup-kubernetes-cluster-in-rancher/image-20220209175206103.png" alt="image-20220209175206103"></p>
+<h3 id="安装-Rancher-CLI，kubectl"><a href="#安装-Rancher-CLI，kubectl" class="headerlink" title="安装 Rancher CLI，kubectl"></a>安装 Rancher CLI，kubectl</h3><p>最后为了方便本地通过终端工具操作 Rancher 及 Kubernetes 集群，建议安装相应的CLI工具，以下相关文档 <a href="https://rancher.com/docs/rancher/v2.6/en/quick-start-guide/cli/">CLI with Rancher</a> 自行安装。安装完毕后接可以愉快的玩耍了。</p>
+<figure class="highlight bash"><table><tr><td class="code"><pre><span class="line">➜  ~ rancher nodes</span><br><span class="line">ID                       NAME            STATE     POOL      DESCRIPTION</span><br><span class="line">c-rhnr4:m-924c09dacfb5   devserv-01   active</span><br><span class="line">c-rhnr4:m-8842c2782391   devserv-02   active</span><br><span class="line">c-rhnr4:m-286a6c78bd24   devserv-03   active</span><br><span class="line">➜  ~</span><br><span class="line">➜  ~ kubectl get nodes</span><br><span class="line">NAME            STATUS   ROLES                      AGE   VERSION</span><br><span class="line">devserv-01			Ready    controlplane,etcd,worker   25h   v1.20.14</span><br><span class="line">devserv-02			Ready    worker                     24h   v1.20.14</span><br><span class="line">devserv-03			Ready    worker                     24h   v1.20.14</span><br><span class="line">➜  ~</span><br></pre></td></tr></table></figure>
+
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>未来是 Kubernetes 的天下，会有很多云原生相关技术，有一套开发测试环境能快速了解一些技术原理及相关机制，利用好技术红利能帮助企业大大地提高效率及降低成本。也许这内容容易过时，毕竟技术更新迭代太快了，但是这是了解云原生技术的第一步，现在搭建环境已经不是什么难事，唯一要做的就是仔细阅读官方文档，最好不要从其他人的博客文章来获取搭建步骤，当然也包括本文。这里仅作为搭建过程的参考，希望你能通过官方文档自己完成集群的搭建。</p>
+<h2 id="References"><a href="#References" class="headerlink" title="References"></a>References</h2><ul>
+<li>Kubernetes Components, <a href="https://kubernetes.io/docs/concepts/overview/components/">https://kubernetes.io/docs/concepts/overview/components/</a></li>
+<li>Rancher Architecture, <a href="https://rancher.com/docs/rancher/v2.0-v2.4/en/overview/architecture/">https://rancher.com/docs/rancher/v2.0-v2.4/en/overview/architecture/</a></li>
+<li>Install Docker Engine, <a href="https://docs.docker.com/engine/install/">https://docs.docker.com/engine/install/</a></li>
+<li>Installing Rancher on a Single Node Using Docker, <a href="https://rancher.com/docs/rancher/v2.6/en/installation/other-installation-methods/single-node-docker/">https://rancher.com/docs/rancher/v2.6/en/installation/other-installation-methods/single-node-docker/</a></li>
+<li>Bootstrapping clusters with kubeadm, <a href="https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/">https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/</a></li>
+</ul>
+]]></content>
+      <categories>
+        <category>技术漫谈</category>
+      </categories>
+      <tags>
+        <tag>kubernetes</tag>
+        <tag>rancher</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>SkyWalking轻量级队列内核</title>
+    <url>/posts/skywalking-datacarrier/</url>
+    <content><![CDATA[<p>前阵子有人评判SkyWalking的客户端的实现设计上不符合业界规范，说Java客户端存在导致JVM OOM的缺陷。抛开争论，我们先来研究下SkyWalking的轻量级队列设计，再来讨论此具备争议性的话题。（本文基于SkyWalking <code>8.2.0</code>版本源码，及Trace数据上报为例）</p>
+<span id="more"></span>
+
+<h2 id="轻量级队列"><a href="#轻量级队列" class="headerlink" title="轻量级队列"></a>轻量级队列</h2><p>何为轻量级队列内核？SkyWalking内部为了解决多线程内部通信问题，实现了一套轻量级的无锁环形内存队列，在很多基础的功能都有使用。为了了解轻量级队列，首先要介绍了几个核心对象：</p>
+<ul>
+<li><strong>Buffer</strong>，用来存储数据的环形数组。</li>
+<li><strong>Channels</strong>，用来储存多个Buffer的通道。</li>
+<li><strong>DataCarrier</strong>，轻量级队列的操作入口工具类。</li>
+</ul>
+<h3 id="Buffer"><a href="#Buffer" class="headerlink" title="Buffer"></a>Buffer</h3><p>Buffer对象实现了QueueBuffer接口，核心操作主要有：</p>
+<ul>
+<li>save(T data)。保存数据到buffer环形数组中。</li>
+<li>obtain(List<T> consumeList)。从环形数据获取数据到指定的列表中。</li>
+</ul>
+<p>核心的几个成员变量有：</p>
+<ul>
+<li><strong>buffer</strong>，真正存在数据的数组</li>
+<li><strong>strategy</strong>，存放策略，当准备写数据时原来的数据还未被消费的处理机制，目前有两种策略：<ul>
+<li>BLOCKING，阻塞等到到旧数据被消费后再写入</li>
+<li>IF_POSSIBLE，写失败时会有重试n次的机制，如果都失败则丢弃</li>
+</ul>
+</li>
+<li><strong>index</strong>，数据写入的索引记录器，当数组写到尾部时会自动回到首部，从而形成环形数据的机制。</li>
+</ul>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">Buffer</span>&lt;T&gt; implements &lt;T&gt; &#123;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> Object[] buffer;</span><br><span class="line">    <span class="keyword">private</span> BufferStrategy strategy;</span><br><span class="line">    <span class="keyword">private</span> AtomicRangeInteger index;</span><br><span class="line"></span><br><span class="line">    Buffer(<span class="type">int</span> bufferSize, BufferStrategy strategy) &#123;...&#125;</span><br><span class="line">  	...</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="Channels"><a href="#Channels" class="headerlink" title="Channels"></a>Channels</h3><p>Channels对象包含了一组Buffer对象，核心的几个成员变量有：</p>
+<ul>
+<li><strong>bufferChannels</strong>，如果策略IF_POSSIBLE，默认是Buffer对象数组</li>
+<li><strong>dataPartitioner</strong>，Buffer分配器，往Channels写数据时需要先选择一个Buffer。默认有两种实现：<ul>
+<li>SimpleRollingPartitioner，简单的轮询bufferChannels数组</li>
+<li>ProducerThreadPartitioner，根据生产者线程的ID取模，找到对应的Buffer</li>
+</ul>
+</li>
+</ul>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">Channels</span>&lt;T&gt; &#123;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> QueueBuffer&lt;T&gt;[] bufferChannels;</span><br><span class="line">    <span class="keyword">private</span> IDataPartitioner&lt;T&gt; dataPartitioner;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> BufferStrategy strategy;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> <span class="type">long</span> size;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">public</span> <span class="title function_">Channels</span><span class="params">(<span class="type">int</span> channelSize, <span class="type">int</span> bufferSize, IDataPartitioner&lt;T&gt; partitioner, BufferStrategy strategy)</span> &#123;...&#125;</span><br><span class="line">  	...</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="DataCarrier"><a href="#DataCarrier" class="headerlink" title="DataCarrier"></a>DataCarrier</h3><p>DataCarrier是轻量级队列的操作入口，其包含了一个Channels对象，以及produce和consume方法。</p>
+<p>核心成员变量：</p>
+<ul>
+<li><strong>channels</strong>，写入的数据的入口，内部封装的Buffer分配逻辑</li>
+<li><strong>driver</strong>，数据消费的驱动器</li>
+</ul>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">DataCarrier</span>&lt;T&gt; &#123;</span><br><span class="line">    <span class="keyword">private</span> Channels&lt;T&gt; channels;</span><br><span class="line">    <span class="keyword">private</span> IDriver driver;</span><br><span class="line">    <span class="keyword">private</span> String name;</span><br><span class="line"></span><br><span class="line">  	<span class="keyword">public</span> <span class="title function_">DataCarrier</span><span class="params">(String name, String envPrefix, <span class="type">int</span> channelSize, <span class="type">int</span> bufferSize)</span> &#123;...&#125;</span><br><span class="line">  	...</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>通过以上的核心对象的介绍，轻量级队列的基本操作流程如下图所示：</p>
+<ul>
+<li>生产者线程会使用DataCarrier的produce方法生产数据</li>
+<li>数据都是通过Channels对象写入，写入时需要先找到对应的Buffer</li>
+<li>Buffer找到可写入的位置，写入真正的数据</li>
+<li>消费者线程再从Buffer获取数据进行处理</li>
+</ul>
+<p><img src="/images/skywalking-datacarrier/image-20201201223222239.png" alt="image-20201201223222239"></p>
+<h2 id="生产消息"><a href="#生产消息" class="headerlink" title="生产消息"></a>生产消息</h2><h3 id="数据产生"><a href="#数据产生" class="headerlink" title="数据产生"></a>数据产生</h3><p>Trace数据生成后会回调<code>TraceSegmentServiceClient#afterFinished</code>，调用carrier.produce生产数据。</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">afterFinished</span><span class="params">(TraceSegment traceSegment)</span> &#123;</span><br><span class="line">    <span class="keyword">if</span> (traceSegment.isIgnore()) &#123;</span><br><span class="line">        <span class="keyword">return</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span> (!carrier.produce(traceSegment)) &#123;</span><br><span class="line">        <span class="keyword">if</span> (LOGGER.isDebugEnable()) &#123;</span><br><span class="line">            LOGGER.debug(<span class="string">&quot;One trace segment has been abandoned, cause by buffer is full.&quot;</span>);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="数据分发"><a href="#数据分发" class="headerlink" title="数据分发"></a>数据分发</h3><p><code>DataCarrier#produce</code>会使用Channels对象的save方法，里面分装了分发逻辑。</p>
+<ul>
+<li>首先会通过dataPartitioner获取到指定的buffer对象</li>
+<li>通过buffer对象save写入数据，如果写入失败根据策略还有重试写入的机制</li>
+</ul>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="type">boolean</span> <span class="title function_">save</span><span class="params">(T data)</span> &#123;</span><br><span class="line">    <span class="type">int</span> <span class="variable">index</span> <span class="operator">=</span> dataPartitioner.partition(bufferChannels.length, data);</span><br><span class="line">    <span class="type">int</span> <span class="variable">retryCountDown</span> <span class="operator">=</span> <span class="number">1</span>;</span><br><span class="line">    <span class="keyword">if</span> (BufferStrategy.IF_POSSIBLE.equals(strategy)) &#123;</span><br><span class="line">        <span class="type">int</span> <span class="variable">maxRetryCount</span> <span class="operator">=</span> dataPartitioner.maxRetryCount();</span><br><span class="line">        <span class="keyword">if</span> (maxRetryCount &gt; <span class="number">1</span>) &#123;</span><br><span class="line">            retryCountDown = maxRetryCount;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">for</span> (; retryCountDown &gt; <span class="number">0</span>; retryCountDown--) &#123;</span><br><span class="line">        <span class="keyword">if</span> (bufferChannels[index].save(data)) &#123;</span><br><span class="line">            <span class="keyword">return</span> <span class="literal">true</span>;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">false</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="数据储存"><a href="#数据储存" class="headerlink" title="数据储存"></a>数据储存</h3><p>真正存储数据比较简单，通过Buffer的原子类index，找到对应的位置写入数据。</p>
+<ul>
+<li>如果对应的位置数据为空，则直接写入数据</li>
+<li>如果对应的位置已有数据，则返回false表示写入失败，由上层的Channels根据策略判断是否重试</li>
+</ul>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="type">boolean</span> <span class="title function_">save</span><span class="params">(T data)</span> &#123;</span><br><span class="line">    <span class="type">int</span> <span class="variable">i</span> <span class="operator">=</span> index.getAndIncrement();</span><br><span class="line">    <span class="keyword">if</span> (buffer[i] != <span class="literal">null</span>) &#123;</span><br><span class="line">        <span class="keyword">switch</span> (strategy) &#123;</span><br><span class="line">            <span class="keyword">case</span> IF_POSSIBLE:</span><br><span class="line">                <span class="keyword">return</span> <span class="literal">false</span>;</span><br><span class="line">            <span class="keyword">default</span>:</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    buffer[i] = data;</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">true</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="消费消息"><a href="#消费消息" class="headerlink" title="消费消息"></a>消费消息</h2><h3 id="消费驱动"><a href="#消费驱动" class="headerlink" title="消费驱动"></a>消费驱动</h3><p>在<code>TraceSegmentServiceClient#boot</code>初始化时会初始化<code>DataCarrier</code>，默认的CHANNEL_SIZE为<code>5</code>，BUFFER_SIZE为<code>300</code>，并会显示设置策略为<code>IF_POSSIBLE</code>，消费线程数为<code>1</code>。</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">boot</span><span class="params">()</span> &#123;</span><br><span class="line">    lastLogTime = System.currentTimeMillis();</span><br><span class="line">    segmentUplinkedCounter = <span class="number">0</span>;</span><br><span class="line">    segmentAbandonedCounter = <span class="number">0</span>;</span><br><span class="line">    carrier = <span class="keyword">new</span> <span class="title class_">DataCarrier</span>&lt;&gt;(CHANNEL_SIZE, BUFFER_SIZE);</span><br><span class="line">    carrier.setBufferStrategy(BufferStrategy.IF_POSSIBLE);</span><br><span class="line">    carrier.consume(<span class="built_in">this</span>, <span class="number">1</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>在调用<code>DataCarrier#consume</code>时，触发了<code>ConsumeDriver#begin</code>消费驱动的初始化，会创建消费线程处理，每个线程会无限循环获取Buffer里的数据，默认每次循环会间隔<code>20ms</code>。</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">run</span><span class="params">()</span> &#123;</span><br><span class="line">    running = <span class="literal">true</span>;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">final</span> List&lt;T&gt; consumeList = <span class="keyword">new</span> <span class="title class_">ArrayList</span>&lt;T&gt;(<span class="number">1500</span>);</span><br><span class="line">    <span class="keyword">while</span> (running) &#123;</span><br><span class="line">        <span class="keyword">if</span> (!consume(consumeList)) &#123;</span><br><span class="line">            <span class="keyword">try</span> &#123;</span><br><span class="line">                Thread.sleep(consumeCycle);</span><br><span class="line">            &#125; <span class="keyword">catch</span> (InterruptedException e) &#123;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// consumer thread is going to stop</span></span><br><span class="line">    <span class="comment">// consume the last time</span></span><br><span class="line">    consume(consumeList);</span><br><span class="line"></span><br><span class="line">    consumer.onExit();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="数据分配"><a href="#数据分配" class="headerlink" title="数据分配"></a>数据分配</h3><p>数据消费时需要考虑避免重复消费，即需要保证线程安全性。那么每个Buffer只能由一个消费线程处理，一个线程可以处理多个Buffer。</p>
+<p>假设有CHANNEL_SIZE&#x3D;5，消费线程数量为2，那么分配如图所示：</p>
+<p><img src="/images/skywalking-datacarrier/image-20201202001912396.png" alt="image-20201202001912396"></p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title function_">allocateBuffer2Thread</span><span class="params">()</span> &#123;</span><br><span class="line">    <span class="type">int</span> <span class="variable">channelSize</span> <span class="operator">=</span> <span class="built_in">this</span>.channels.getChannelSize();</span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * if consumerThreads.length &lt; channelSize</span></span><br><span class="line"><span class="comment">     * each consumer will process several channels.</span></span><br><span class="line"><span class="comment">     *</span></span><br><span class="line"><span class="comment">     * if consumerThreads.length == channelSize</span></span><br><span class="line"><span class="comment">     * each consumer will process one channel.</span></span><br><span class="line"><span class="comment">     *</span></span><br><span class="line"><span class="comment">     * if consumerThreads.length &gt; channelSize</span></span><br><span class="line"><span class="comment">     * there will be some threads do nothing.</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">for</span> (<span class="type">int</span> <span class="variable">channelIndex</span> <span class="operator">=</span> <span class="number">0</span>; channelIndex &lt; channelSize; channelIndex++) &#123;</span><br><span class="line">        <span class="type">int</span> <span class="variable">consumerIndex</span> <span class="operator">=</span> channelIndex % consumerThreads.length;</span><br><span class="line">        consumerThreads[consumerIndex].addDataSource(channels.getBuffer(channelIndex));</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="数据处理"><a href="#数据处理" class="headerlink" title="数据处理"></a>数据处理</h3><p>在每个消费线程里获取所有Buffer的数据到一个集中的数组后，会调用<code>TraceSegmentServiceClient#consume</code>，把数据通过gRPC的方式发送到后端服务。</p>
+<h2 id="TraceSegment"><a href="#TraceSegment" class="headerlink" title="TraceSegment"></a>TraceSegment</h2><p>分析完SkyWalking的轻量级队列实现，需要解释下为什么有开头的争论。内存队列基本上都设置了固定大小，并且默认是非阻塞的方式，发送失败的基本都会被丢弃，这么设计时比较合理的，也不太可能出现OOM影响业务。</p>
+<p><code>TraceSegment</code>这个概念是SkyWalking提出的，介于Google Dapper提出的<code>Trace Tree</code>与<code>Span</code>这两个概念之间，表示一个进程单次处理涉及的所有Span，这些所有Span形成一个Segment，作为上述的Buffer存储的实际对象。Segment的好处是打包了span上报成功后基本上能得到这个Segment内完整的Span数据，为什么说是基本上？因为单个segment默认最多存放300个span，多了会丢弃，这个可以参数可以调大，但是还是建议减少不必要的span，便于链路分析时减少干扰。</p>
+<p><code>TraceSegment</code>的形成是靠栈实现的，每次创建span时就压入栈，每个span完成时就会出栈。所以每次span完成时并不会直接上报数据到后端，需要等待整个Segment完成。相关源码可看<code>TracingContext#finish</code>的<code>activeSpanStack.isEmpty()</code>判断。</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title function_">finish</span><span class="params">()</span> &#123;</span><br><span class="line">    <span class="keyword">if</span> (isRunningInAsyncMode) &#123;</span><br><span class="line">        asyncFinishLock.lock();</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">        <span class="type">boolean</span> <span class="variable">isFinishedInMainThread</span> <span class="operator">=</span> activeSpanStack.isEmpty() &amp;&amp; running;</span><br><span class="line">        <span class="keyword">if</span> (isFinishedInMainThread) &#123;</span><br><span class="line">            <span class="comment">/*</span></span><br><span class="line"><span class="comment">             * Notify after tracing finished in the main thread.</span></span><br><span class="line"><span class="comment">             */</span></span><br><span class="line">            TracingThreadListenerManager.notifyFinish(<span class="built_in">this</span>);</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (isFinishedInMainThread &amp;&amp; (!isRunningInAsyncMode || asyncSpanCounter == <span class="number">0</span>)) &#123;</span><br><span class="line">            <span class="type">TraceSegment</span> <span class="variable">finishedSegment</span> <span class="operator">=</span> segment.finish(isLimitMechanismWorking());</span><br><span class="line">            TracingContext.ListenerManager.notifyFinish(finishedSegment);</span><br><span class="line">            running = <span class="literal">false</span>;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125; <span class="keyword">finally</span> &#123;</span><br><span class="line">        <span class="keyword">if</span> (isRunningInAsyncMode) &#123;</span><br><span class="line">            asyncFinishLock.unlock();</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>如果某一瞬间有大量的并发请求，创建了大量的span，并且span都没有stop，span都存在栈中，那么内存是有可能存在大量的span导致OOM的。但是这种可能性是极小的，假设一个进程开了1000个线程，每个线程执行时包含了20个span，那么某一瞬间所有栈里存储的span最多也就20000个span，每个span的大小取决了存放的内容与扩张属性，一般来说这并不会耗费多少内存。默认参数加上稳定的插件基本上是没问题的，除非使用者使用很不合理，设置了极端的参数配置等。</p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>回顾本文，主要讲述SkyWalking内部实现的轻量级内存队列原理，重点谈论了几个核心的对象，以及如何发送消息与消费消息。最后针对SkyWalking的TraceSegment设计所有简单描述。有兴趣的同学可以深入了解Apache SkyWalking各功能模块，对架构设计上会有很大的帮助，也可以参与社区的讨论交流，了解SkyWalking如何实践Apache的开源文化。</p>
+]]></content>
+      <categories>
+        <category>技术漫谈</category>
+      </categories>
+      <tags>
+        <tag>skywalking</tag>
+      </tags>
+  </entry>
+</search>

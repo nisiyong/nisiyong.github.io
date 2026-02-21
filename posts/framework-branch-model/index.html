@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222"><meta name="generator" content="Hexo 6.3.0">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha256-HtsXJanqjKTc8vVQjO4YMhiqFoXkfBsjBWcX91T1jr8=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"nisiyong.github.io","root":"/","images":"/images","scheme":"Gemini","darkmode":false,"version":"8.15.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12},"copycode":{"enable":false,"style":null},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"prism":false,"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.xml","localsearch":{"enable":true,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false}}</script><script src="/js/config.js"></script>
+
+    <meta name="description" content="在企业内部关于代码项目的类型大致可以分为两类，业务型代码与框架型代码。业务型代码即以业务快速迭代，有完善的业务测试并交付；框架型代码主要是对针对所有业务代码做一些通用型下层，或一些工具类，或开源项目扩展集成等。这两类项目在Git分支协作使用方式上，还是有点不同。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="框架类版本管理分支规范">
+<meta property="og:url" content="https://nisiyong.github.io/posts/framework-branch-model/index.html">
+<meta property="og:site_name" content="Stephen Ni&#39;s Blog">
+<meta property="og:description" content="在企业内部关于代码项目的类型大致可以分为两类，业务型代码与框架型代码。业务型代码即以业务快速迭代，有完善的业务测试并交付；框架型代码主要是对针对所有业务代码做一些通用型下层，或一些工具类，或开源项目扩展集成等。这两类项目在Git分支协作使用方式上，还是有点不同。">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://nisiyong.github.io/images/framework-branch-model/gb.png">
+<meta property="article:published_time" content="2018-12-13T12:57:09.000Z">
+<meta property="article:modified_time" content="2026-02-21T14:49:09.134Z">
+<meta property="article:author" content="Stephen Ni">
+<meta property="article:tag" content="git">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://nisiyong.github.io/images/framework-branch-model/gb.png">
+
+
+<link rel="canonical" href="https://nisiyong.github.io/posts/framework-branch-model/">
+
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://nisiyong.github.io/posts/framework-branch-model/","path":"posts/framework-branch-model/","title":"框架类版本管理分支规范"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>框架类版本管理分支规范 | Stephen Ni's Blog</title>
+  
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-HZ9W81HNR8"></script>
+  <script class="next-config" data-name="google_analytics" type="application/json">{"tracking_id":"G-HZ9W81HNR8","only_pageview":false}</script>
+  <script src="/js/third-party/analytics/google-analytics.js"></script>
+
+
+
+
+
+
+
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+<link rel="alternate" href="/atom.xml" title="Stephen Ni's Blog" type="application/atom+xml">
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Stephen Ni's Blog</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>关于</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup"><div class="search-header">
+  <span class="search-icon">
+    <i class="fa fa-search"></i>
+  </span>
+  <div class="search-input-container">
+    <input autocomplete="off" autocapitalize="off" maxlength="80"
+           placeholder="搜索..." spellcheck="false"
+           type="search" class="search-input">
+  </div>
+  <span class="popup-btn-close" role="button">
+    <i class="fa fa-times-circle"></i>
+  </span>
+</div>
+<div class="search-result-container no-result">
+  <div class="search-result-icon">
+    <i class="fa fa-spinner fa-pulse fa-5x"></i>
+  </div>
+</div>
+
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%89%88%E6%9C%AC%E7%AE%A1%E7%90%86"><span class="nav-number">1.</span> <span class="nav-text">版本管理</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%88%86%E6%94%AF%E7%AE%A1%E7%90%86"><span class="nav-number">2.</span> <span class="nav-text">分支管理</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#release%E5%8F%91%E5%B8%83"><span class="nav-number">2.1.</span> <span class="nav-text">release发布</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#bug%E4%BF%AE%E5%A4%8D"><span class="nav-number">2.2.</span> <span class="nav-text">bug修复</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#feature%E5%88%86%E6%94%AF"><span class="nav-number">2.3.</span> <span class="nav-text">feature分支</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%8F%90%E4%BA%A4%E6%B3%A8%E6%84%8F"><span class="nav-number">2.4.</span> <span class="nav-text">提交注意</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%88%86%E6%94%AF%E7%A4%BA%E6%84%8F%E5%9B%BE"><span class="nav-number">3.</span> <span class="nav-text">分支示意图</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%9B%B8%E5%85%B3%E9%93%BE%E6%8E%A5"><span class="nav-number">4.</span> <span class="nav-text">相关链接</span></a></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Stephen Ni"
+      src="/uploads/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Stephen Ni</p>
+  <div class="site-description" itemprop="description">成长是克服天性的过程</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">13</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">2</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">16</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/nisiyong" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;nisiyong" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://twitter.com/nisiyong" title="Twitter → https:&#x2F;&#x2F;twitter.com&#x2F;nisiyong" rel="noopener me" target="_blank"><i class="fab fa-twitter fa-fw"></i>Twitter</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="/atom.xml" title="RSS → atom.xml" rel="noopener me"><i class="fa fa-rss fa-fw"></i>RSS</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://weibo.com/nisiyong" title="Weibo → https:&#x2F;&#x2F;weibo.com&#x2F;nisiyong" rel="noopener me" target="_blank"><i class="fab fa-weibo fa-fw"></i>Weibo</a>
+      </span>
+  </div>
+  <div class="cc-license animated" itemprop="license">
+    <a href="https://creativecommons.org/licenses/by-nc-nd/4.0/" class="cc-opacity" rel="noopener" target="_blank"><img src="https://cdnjs.cloudflare.com/ajax/libs/creativecommons-vocabulary/2020.11.3/assets/license_badges/small/by_nc_nd.svg" alt="Creative Commons"></a>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://nisiyong.github.io/posts/framework-branch-model/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/uploads/avatar.jpg">
+      <meta itemprop="name" content="Stephen Ni">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Stephen Ni's Blog">
+      <meta itemprop="description" content="成长是克服天性的过程">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="框架类版本管理分支规范 | Stephen Ni's Blog">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          框架类版本管理分支规范
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2018-12-13 12:57:09" itemprop="dateCreated datePublished" datetime="2018-12-13T12:57:09+00:00">2018-12-13</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E6%8A%80%E6%9C%AF%E6%BC%AB%E8%B0%88/" itemprop="url" rel="index"><span itemprop="name">技术漫谈</span></a>
+        </span>
+    </span>
+
+  
+  
+  <span class="post-meta-item">
+    
+      <span class="post-meta-item-icon">
+        <i class="far fa-comment"></i>
+      </span>
+      <span class="post-meta-item-text">Disqus：</span>
+    
+    <a title="disqus" href="/posts/framework-branch-model/#disqus_thread" itemprop="discussionUrl">
+      <span class="post-comments-count disqus-comment-count" data-disqus-identifier="posts/framework-branch-model/" itemprop="commentCount"></span>
+    </a>
+  </span>
+  
+  
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+        <p>在企业内部关于代码项目的类型大致可以分为两类，<code>业务型代码</code>与<code>框架型代码</code>。<code>业务型代码</code>即以业务快速迭代，有完善的业务测试并交付；<code>框架型代码</code>主要是对针对所有业务代码做一些通用型下层，或一些工具类，或开源项目扩展集成等。这两类项目在Git分支协作使用方式上，还是有点不同。</p>
+<span id="more"></span>
+
+<p><code>业务型代码</code>可以采用GitFlow这类型协作方式，并且有一些GUI工具都支持GitFlow，如GiKraken，SourceTree等。有人也会说GitFlow不好，比如使用阿里的AoneFlow模式会更好，其实一般中小心型企业有GitFlow来做业务代码的分支规范，有现成的工具是最好的选择了，至于想用AoneFlow模式的也可以，但是要自己在发布系统上做相应的分支操作逻辑等。</p>
+<p><code>框架型代码</code>一般来说不是以周期性迭代交付的，而是要求稳定的功能输出，既要有稳定的版本，也要有新功能的加入，这里用Trunk-Based分支模式比较适合。</p>
+<p>今天要分享的就是<code>框架型代码</code>的版本管理分支规范，参考了Trunk-Based并做了相应的处理规范。</p>
+<p>我们框架类型的项目采用的版本管理参考<a target="_blank" rel="noopener" href="http://dubbo.apache.org/zh-cn/docs/dev/release.html">Dubbo</a>的方式，这里需要对Git分支管理做一个补充。</p>
+<h2 id="版本管理"><a href="#版本管理" class="headerlink" title="版本管理"></a>版本管理</h2><p><strong>新功能的开发</strong> 和 <strong>稳定性的提高</strong> 对产品都很重要。但是添加新功能会影响稳定性，Dubbo 使用如下的版本开发模式来保障两者。</p>
+<ul>
+<li>BugFix 版本：低版本，比如 <code>2.4.x</code>。是 GA 版本，线上使用的版本，只会 BugFix，升级第三位版本号。</li>
+<li>新功能版本：高版本，比如 <code>2.5.x</code>。加新功能的版本，会给对新功能有需求的应用试用。</li>
+</ul>
+<p><code>2.5.x</code> 的新功能基本稳定后，进入 <code>2.5.x</code> 试用阶段。找足够多的应用试用 <code>2.5.x</code> 版本。</p>
+<p>在 <code>2.5.x</code> 够稳定后：</p>
+<ul>
+<li><code>2.5.x</code> 成为 GA 版本，只 BugFix，推广使用此版本。如何可行，可以推进应用在期望的时间点内升级到 GA 版本。</li>
+<li><code>2.4.x</code> 不再开发，应用碰到 Bug 让直接升级。（这个称为“夕阳条款”）</li>
+<li>从 <code>2.5.x</code> 拉成分支 <code>2.6.0</code>，作为新功能开发版本。</li>
+</ul>
+<h2 id="分支管理"><a href="#分支管理" class="headerlink" title="分支管理"></a>分支管理</h2><p>由于框架类的代码管理不同于业务代码，这里抛弃<code>GitFlow</code>严格的模型，借鉴<code>TrunkBased</code>模型，定下如下分支管理规范。</p>
+<p>根据GA版本与Feature版本，我们需要两个<strong>并行主干分支</strong>，假设当前的GA版本是<code>2.5.x</code>，那么主干分支如下：</p>
+<ul>
+<li>master分支：作为当前Feature主干分支（2.6.x），做新功能开发。</li>
+<li>2.5.x分支：作为当前GA主干分支，只做bug修复。</li>
+</ul>
+<p>当Feature版本2.6.x足够稳定后：</p>
+<ul>
+<li>2.6.x成为新的GA版本，就从当前的master创建新分支<code>2.6.x</code>，作为新的GA分支</li>
+<li>master分支则成为新的Feature分支，即2.7.x</li>
+<li>旧的GA版本2.5.x分支停止开发维护，应用碰到Bug直接升级新版GA（“夕阳条款”）</li>
+</ul>
+<h3 id="release发布"><a href="#release发布" class="headerlink" title="release发布"></a>release发布</h3><p>无论是GA版本，还是Feature版本，都需要发布具体的版本，这里都统一使用同样的逻辑。</p>
+<p>如Feature版本，即所在master分支：</p>
+<ul>
+<li>在master分支修改代码中的版本号为RELEASE类型</li>
+<li>提交并创建相应的tag，<code>v2.7.0</code>，然后push</li>
+<li>在利用该tag发布代码</li>
+<li>在master分支修改代码中的版本号为SNAPSHOT类型</li>
+</ul>
+<p>如GA版本，即所在的2.6.x分支</p>
+<ul>
+<li>在2.6.x分支修改代码中的版本号为RELEASE类型</li>
+<li>提交并创建相应的tag，<code>v2.6.0</code>，然后push</li>
+<li>在利用该tag发布代码</li>
+<li>在2.6.x分支修改代码中的版本号为SNAPSHOT类型</li>
+</ul>
+<h3 id="bug修复"><a href="#bug修复" class="headerlink" title="bug修复"></a>bug修复</h3><p>由于有两个并行主干分支，所以修复bug时需考虑两种情况：</p>
+<ul>
+<li>Feature版本无需修复，只需GA版本修复</li>
+<li>Feature版本和GA版本，需要同时修复Bug</li>
+</ul>
+<p>1）只需GA版本修复</p>
+<p>这种情况比较简单，直接在当前的GA分支上提交修复bug即可。如在GA版本分支2.6.x上修复</p>
+<p>2）需要同时修复</p>
+<p>两个分支需要同时修复时，这里我们不考虑<code>merge</code>的方式，这样会使分支结构不清晰，我们采用</p>
+<p><code>cherry-pick</code>的方式，操作如下：</p>
+<ul>
+<li>在当前的Feature版本，即master分支上，修复bug，并提交</li>
+<li>切换到GA版本，将master分支上的bug修复提交<code>cherry-pick</code>到当前分支</li>
+</ul>
+<p>以上方式就是bug修复的逻辑。</p>
+<p>如果需要修复完就发布，就类似于hotfix，我们不采用hotfix分支，直接按上面的<strong>release发布</strong>逻辑即可。</p>
+<h3 id="feature分支"><a href="#feature分支" class="headerlink" title="feature分支"></a>feature分支</h3><p>理论上来说新特性统一在Feature版本中实现，即直接在master分支开发实现即可。但如果实在有些试验性的新功能需要开发，并且不想纳入当前的Feature版本，那么我们可以这样操作：</p>
+<ul>
+<li>在当前的master分支，创建新分支feature&#x2F;xxx</li>
+<li>在新的feature分支开发</li>
+<li>当需要纳入Feature版本时，切换到master分支，merge该功能分支</li>
+</ul>
+<h3 id="提交注意"><a href="#提交注意" class="headerlink" title="提交注意"></a>提交注意</h3><p>多人协作开发时，会在同个分支提交代码，如果遇到本地分布与远程分支有分叉时（即push不上去），这是尽量不要使用pull，而是采用rebase的方式。</p>
+<p>如将本地master分支rebase到origin&#x2F;master分支，保持分支的整洁性。</p>
+<h2 id="分支示意图"><a href="#分支示意图" class="headerlink" title="分支示意图"></a>分支示意图</h2><p><img src="/images/framework-branch-model/gb.png" alt="gb"></p>
+<h2 id="相关链接"><a href="#相关链接" class="headerlink" title="相关链接"></a>相关链接</h2><ul>
+<li><a target="_blank" rel="noopener" href="https://nvie.com/posts/a-successful-git-branching-model/">https://nvie.com/posts/a-successful-git-branching-model/</a></li>
+<li><a target="_blank" rel="noopener" href="https://trunkbaseddevelopment.com/">https://trunkbaseddevelopment.com/</a></li>
+<li><a target="_blank" rel="noopener" href="https://yq.aliyun.com/articles/573549">https://yq.aliyun.com/articles/573549</a></li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          
+
+<div class="post-copyright">
+<ul>
+  <li class="post-copyright-author">
+      <strong>本文作者： </strong>Stephen Ni
+  </li>
+  <li class="post-copyright-link">
+      <strong>本文链接：</strong>
+      <a href="https://nisiyong.github.io/posts/framework-branch-model/" title="框架类版本管理分支规范">https://nisiyong.github.io/posts/framework-branch-model/</a>
+  </li>
+  <li class="post-copyright-license">
+      <strong>版权声明： </strong>本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-nd/4.0/" rel="noopener" target="_blank"><i class="fab fa-fw fa-creative-commons"></i>BY-NC-ND</a> 许可协议。转载请注明出处！
+  </li>
+</ul>
+</div>
+
+          <div class="post-tags">
+              <a href="/tags/git/" rel="tag"># git</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/posts/distributed-id-design-and-implementation/" rel="prev" title="分布式唯一ID的方案与实现">
+                  <i class="fa fa-chevron-left"></i> 分布式唯一ID的方案与实现
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/posts/skywalking-datacarrier/" rel="next" title="SkyWalking轻量级队列内核">
+                  SkyWalking轻量级队列内核 <i class="fa fa-chevron-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+    
+  <div class="comments" id="disqus_thread">
+    <noscript>Please enable JavaScript to view the comments powered by Disqus.</noscript>
+  </div>
+  
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+
+<div class="copyright">
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Stephen Ni</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/" rel="noopener" target="_blank">NexT.Gemini</a> 强力驱动
+  </div>
+
+    </div>
+  </footer>
+
+  
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js" integrity="sha256-XL2inqUJaslATFnHdJOi9GfQ60on8Wx1C2H8DYiN1xY=" crossorigin="anonymous"></script>
+<script src="/js/comments.js"></script><script src="/js/utils.js"></script><script src="/js/motion.js"></script><script src="/js/next-boot.js"></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.4.1/search.js" integrity="sha256-1kfA5uHPf65M5cphT2dvymhkuyHPQp5A53EGZOnOLmc=" crossorigin="anonymous"></script>
+<script src="/js/third-party/search/local-search.js"></script>
+
+
+
+
+
+  
+
+
+
+
+<script class="next-config" data-name="disqus" type="application/json">{"enable":true,"shortname":"nisiyong","count":true,"i18n":{"disqus":"disqus"}}</script>
+<script src="/js/third-party/comments/disqus.js"></script>
+
+</body>
+</html>

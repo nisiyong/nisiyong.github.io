@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222"><meta name="generator" content="Hexo 6.3.0">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha256-HtsXJanqjKTc8vVQjO4YMhiqFoXkfBsjBWcX91T1jr8=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"nisiyong.github.io","root":"/","images":"/images","scheme":"Gemini","darkmode":false,"version":"8.15.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12},"copycode":{"enable":false,"style":null},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"prism":false,"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.xml","localsearch":{"enable":true,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false}}</script><script src="/js/config.js"></script>
+
+    <meta name="description" content="为了方便快速熟悉 Kubernetes 相关功能特性，拥有一个私人的 Kubernetes 集群是非常方便的。一般在会推荐在本地使用 minikube，我也尝试过多次，不过还是有点委屈我的 16GB 的 Macbook Pro。年前在考 CKAD 时用 Google Cloud 免费的 300 刀直接创建了 GKE，本地 kubectl 直接连接使用非常方便。由于官方文档比较多，为了方便，当时记录">
+<meta property="og:type" content="article">
+<meta property="og:title" content="使用 kubectl 连接 Google Cloud GKE">
+<meta property="og:url" content="https://nisiyong.github.io/posts/connect-gke-cluster-with-kubectl/index.html">
+<meta property="og:site_name" content="Stephen Ni&#39;s Blog">
+<meta property="og:description" content="为了方便快速熟悉 Kubernetes 相关功能特性，拥有一个私人的 Kubernetes 集群是非常方便的。一般在会推荐在本地使用 minikube，我也尝试过多次，不过还是有点委屈我的 16GB 的 Macbook Pro。年前在考 CKAD 时用 Google Cloud 免费的 300 刀直接创建了 GKE，本地 kubectl 直接连接使用非常方便。由于官方文档比较多，为了方便，当时记录">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://nisiyong.github.io/images/connect-gke-cluster-with-kubectl/gke.png">
+<meta property="article:published_time" content="2023-02-23T22:26:30.000Z">
+<meta property="article:modified_time" content="2026-02-21T14:49:09.133Z">
+<meta property="article:author" content="Stephen Ni">
+<meta property="article:tag" content="kubernetes">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://nisiyong.github.io/images/connect-gke-cluster-with-kubectl/gke.png">
+
+
+<link rel="canonical" href="https://nisiyong.github.io/posts/connect-gke-cluster-with-kubectl/">
+
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://nisiyong.github.io/posts/connect-gke-cluster-with-kubectl/","path":"posts/connect-gke-cluster-with-kubectl/","title":"使用 kubectl 连接 Google Cloud GKE"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>使用 kubectl 连接 Google Cloud GKE | Stephen Ni's Blog</title>
+  
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-HZ9W81HNR8"></script>
+  <script class="next-config" data-name="google_analytics" type="application/json">{"tracking_id":"G-HZ9W81HNR8","only_pageview":false}</script>
+  <script src="/js/third-party/analytics/google-analytics.js"></script>
+
+
+
+
+
+
+
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+<link rel="alternate" href="/atom.xml" title="Stephen Ni's Blog" type="application/atom+xml">
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Stephen Ni's Blog</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>关于</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup"><div class="search-header">
+  <span class="search-icon">
+    <i class="fa fa-search"></i>
+  </span>
+  <div class="search-input-container">
+    <input autocomplete="off" autocapitalize="off" maxlength="80"
+           placeholder="搜索..." spellcheck="false"
+           type="search" class="search-input">
+  </div>
+  <span class="popup-btn-close" role="button">
+    <i class="fa fa-times-circle"></i>
+  </span>
+</div>
+<div class="search-result-container no-result">
+  <div class="search-result-icon">
+    <i class="fa fa-spinner fa-pulse fa-5x"></i>
+  </div>
+</div>
+
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#1%EF%BC%89%E5%AE%89%E8%A3%85-gcloud"><span class="nav-number">1.</span> <span class="nav-text">1）安装 gcloud</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2%EF%BC%89%E5%AE%89%E8%A3%85-gke-gcloud-auth-plugin"><span class="nav-number">2.</span> <span class="nav-text">2）安装 gke-gcloud-auth-plugin</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3%EF%BC%89%E9%85%8D%E7%BD%AE-kubectl"><span class="nav-number">3.</span> <span class="nav-text">3）配置 kubectl</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4%EF%BC%89%E9%AA%8C%E8%AF%81-kubectl-%E8%BF%9E%E6%8E%A5-GKE"><span class="nav-number">4.</span> <span class="nav-text">4）验证 kubectl 连接 GKE</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Reference"><span class="nav-number">5.</span> <span class="nav-text">Reference</span></a></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Stephen Ni"
+      src="/uploads/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Stephen Ni</p>
+  <div class="site-description" itemprop="description">成长是克服天性的过程</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">13</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">2</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">16</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/nisiyong" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;nisiyong" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://twitter.com/nisiyong" title="Twitter → https:&#x2F;&#x2F;twitter.com&#x2F;nisiyong" rel="noopener me" target="_blank"><i class="fab fa-twitter fa-fw"></i>Twitter</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="/atom.xml" title="RSS → atom.xml" rel="noopener me"><i class="fa fa-rss fa-fw"></i>RSS</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://weibo.com/nisiyong" title="Weibo → https:&#x2F;&#x2F;weibo.com&#x2F;nisiyong" rel="noopener me" target="_blank"><i class="fab fa-weibo fa-fw"></i>Weibo</a>
+      </span>
+  </div>
+  <div class="cc-license animated" itemprop="license">
+    <a href="https://creativecommons.org/licenses/by-nc-nd/4.0/" class="cc-opacity" rel="noopener" target="_blank"><img src="https://cdnjs.cloudflare.com/ajax/libs/creativecommons-vocabulary/2020.11.3/assets/license_badges/small/by_nc_nd.svg" alt="Creative Commons"></a>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://nisiyong.github.io/posts/connect-gke-cluster-with-kubectl/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/uploads/avatar.jpg">
+      <meta itemprop="name" content="Stephen Ni">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Stephen Ni's Blog">
+      <meta itemprop="description" content="成长是克服天性的过程">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="使用 kubectl 连接 Google Cloud GKE | Stephen Ni's Blog">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          使用 kubectl 连接 Google Cloud GKE
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2023-02-23 22:26:30" itemprop="dateCreated datePublished" datetime="2023-02-23T22:26:30+00:00">2023-02-23</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E6%8A%80%E6%9C%AF%E6%BC%AB%E8%B0%88/" itemprop="url" rel="index"><span itemprop="name">技术漫谈</span></a>
+        </span>
+    </span>
+
+  
+  
+  <span class="post-meta-item">
+    
+      <span class="post-meta-item-icon">
+        <i class="far fa-comment"></i>
+      </span>
+      <span class="post-meta-item-text">Disqus：</span>
+    
+    <a title="disqus" href="/posts/connect-gke-cluster-with-kubectl/#disqus_thread" itemprop="discussionUrl">
+      <span class="post-comments-count disqus-comment-count" data-disqus-identifier="posts/connect-gke-cluster-with-kubectl/" itemprop="commentCount"></span>
+    </a>
+  </span>
+  
+  
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+        <p>为了方便快速熟悉 Kubernetes 相关功能特性，拥有一个私人的 Kubernetes 集群是非常方便的。一般在会推荐在本地使用 <a target="_blank" rel="noopener" href="https://github.com/kubernetes/minikube">minikube</a>，我也尝试过多次，不过还是有点委屈我的 16GB 的 Macbook Pro。年前在考 CKAD 时用 Google Cloud 免费的 300 刀直接创建了 GKE，本地 kubectl 直接连接使用非常方便。由于官方文档比较多，为了方便，当时记录了连接 GKE 的相关步骤及资料，希望对相关同学有所帮助。</p>
+<span id="more"></span>
+
+<h2 id="1）安装-gcloud"><a href="#1）安装-gcloud" class="headerlink" title="1）安装 gcloud"></a>1）安装 gcloud</h2><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">cd</span> /tmp</span><br><span class="line">wget [&lt;https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-413.0.0-darwin-x86_64.tar.gz&gt;](&lt;https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-413.0.0-darwin-x86_64.tar.gz&gt;)	</span><br><span class="line">tar zxvf google-cloud-cli-413.0.0-darwin-x86_64.tar.gz -C ~/opt</span><br><span class="line">~/opt/google-cloud-sdk/install.sh</span><br><span class="line">~/opt/google-cloud-sdk/bin/gcloud init</span><br></pre></td></tr></table></figure>
+
+<h2 id="2）安装-gke-gcloud-auth-plugin"><a href="#2）安装-gke-gcloud-auth-plugin" class="headerlink" title="2）安装 gke-gcloud-auth-plugin"></a>2）安装 gke-gcloud-auth-plugin</h2><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><span class="line">~ gcloud container clusters get-credentials cluster-1 --zone us-central1-c --project my-project</span><br><span class="line">Fetching cluster endpoint and auth data.</span><br><span class="line">CRITICAL: ACTION REQUIRED: gke-gcloud-auth-plugin, <span class="built_in">which</span> is needed <span class="keyword">for</span> continued use of kubectl, was not found or is not executable. Install gke-gcloud-auth-plugin <span class="keyword">for</span> use with kubectl by following &lt;https://cloud.google.com/blog/products/containers-kubernetes/kubectl-auth-changes-in-gke&gt;</span><br><span class="line">kubeconfig entry generated <span class="keyword">for</span> cluster-1.</span><br><span class="line">➜  ~ gcloud components install gke-gcloud-auth-plugin</span><br><span class="line"></span><br><span class="line">Your current Google Cloud CLI version is: 413.0.0</span><br><span class="line">Installing components from version: 413.0.0</span><br><span class="line"></span><br><span class="line">┌────────────────────────────────────────────┐</span><br><span class="line">│    These components will be installed.     │</span><br><span class="line">├────────────────────────┬─────────┬─────────┤</span><br><span class="line">│          Name          │ Version │   Size  │</span><br><span class="line">├────────────────────────┼─────────┼─────────┤</span><br><span class="line">│ gke-gcloud-auth-plugin │   0.4.0 │ 7.5 MiB │</span><br><span class="line">└────────────────────────┴─────────┴─────────┘</span><br><span class="line"></span><br><span class="line">For the latest full release notes, please visit:</span><br><span class="line">  &lt;https://cloud.google.com/sdk/release_notes&gt;</span><br><span class="line"></span><br><span class="line">Do you want to <span class="built_in">continue</span> (Y/n)?  Y</span><br><span class="line"></span><br><span class="line">╔════════════════════════════════════════════════════════════╗</span><br><span class="line">╠═ Creating update staging area                             ═╣</span><br><span class="line">╠════════════════════════════════════════════════════════════╣</span><br><span class="line">╠═ Installing: gke-gcloud-auth-plugin                       ═╣</span><br><span class="line">╠════════════════════════════════════════════════════════════╣</span><br><span class="line">╠═ Installing: gke-gcloud-auth-plugin                       ═╣</span><br><span class="line">╠════════════════════════════════════════════════════════════╣</span><br><span class="line">╠═ Creating backup and activating new installation          ═╣</span><br><span class="line">╚════════════════════════════════════════════════════════════╝</span><br><span class="line"></span><br><span class="line">Performing post processing steps...done.</span><br><span class="line"></span><br><span class="line">Update <span class="keyword">done</span>!</span><br></pre></td></tr></table></figure>
+
+<h2 id="3）配置-kubectl"><a href="#3）配置-kubectl" class="headerlink" title="3）配置 kubectl"></a>3）配置 kubectl</h2><p><img src="/images/connect-gke-cluster-with-kubectl/gke.png"></p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">➜  ~ gcloud container clusters get-credentials cluster-1 --zone us-central1-c --project hip-watch-373203</span><br><span class="line">Fetching cluster endpoint and auth data.</span><br><span class="line">kubeconfig entry generated <span class="keyword">for</span> cluster-1.</span><br><span class="line">➜  ~</span><br></pre></td></tr></table></figure>
+
+<h2 id="4）验证-kubectl-连接-GKE"><a href="#4）验证-kubectl-连接-GKE" class="headerlink" title="4）验证 kubectl 连接 GKE"></a>4）验证 kubectl 连接 GKE</h2><p>这里推荐下 <a target="_blank" rel="noopener" href="https://github.com/ahmetb/kubectx">kubectx</a>，对于多个 Kubernetes 集群切换非常方便，完成以上步骤操作后就能看到你的 GKE 集群了。</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">➜  ~ kubectx</span><br><span class="line">gke_my-project_us-central1-c_cluster-1</span><br><span class="line">➜  ~</span><br></pre></td></tr></table></figure>
+
+<p>再推荐下 <a target="_blank" rel="noopener" href="https://github.com/ohmyzsh/ohmyzsh/tree/master/plugins/kubectl">ohmyzsh kubectl plugin</a>，简化了很多 Kubernetes 命令行指令。以下命令查看当前集群 node 节点：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">➜  ~ kgno</span><br><span class="line">NAME                                       STATUS   ROLES    AGE     VERSION</span><br><span class="line">gke-cluster-1-default-pool-f4635b04-2rr7   Ready    &lt;none&gt;   9m53s   v1.25.4-gke.2100</span><br><span class="line">gke-cluster-1-default-pool-f4635b04-36lq   Ready    &lt;none&gt;   9m53s   v1.25.4-gke.2100</span><br><span class="line">gke-cluster-1-default-pool-f4635b04-jzx5   Ready    &lt;none&gt;   9m53s   v1.25.4-gke.2100</span><br><span class="line">➜  ~</span><br></pre></td></tr></table></figure>
+
+<p>运行一个 nginx pod，也可以查看已经可以正常使用。</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">➜  ~ k run nginx --image=nginx</span><br><span class="line">pod/nginx created</span><br><span class="line">➜  ~</span><br><span class="line">➜  ~ kgp</span><br><span class="line">NAME    READY   STATUS    RESTARTS   AGE</span><br><span class="line">nginx   1/1     Running   0          6s</span><br><span class="line">➜  ~</span><br></pre></td></tr></table></figure>
+
+<h2 id="Reference"><a href="#Reference" class="headerlink" title="Reference"></a>Reference</h2><ul>
+<li><a target="_blank" rel="noopener" href="https://cloud.google.com/sdk/docs/install">https://cloud.google.com/sdk/docs/install</a></li>
+<li><a target="_blank" rel="noopener" href="https://cloud.google.com/binary-authorization/docs/getting-started-cli">https://cloud.google.com/binary-authorization/docs/getting-started-cli</a></li>
+<li><a target="_blank" rel="noopener" href="https://cloud.google.com/blog/products/containers-kubernetes/kubectl-auth-changes-in-gke">https://cloud.google.com/blog/products/containers-kubernetes/kubectl-auth-changes-in-gke</a></li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          
+
+<div class="post-copyright">
+<ul>
+  <li class="post-copyright-author">
+      <strong>本文作者： </strong>Stephen Ni
+  </li>
+  <li class="post-copyright-link">
+      <strong>本文链接：</strong>
+      <a href="https://nisiyong.github.io/posts/connect-gke-cluster-with-kubectl/" title="使用 kubectl 连接 Google Cloud GKE">https://nisiyong.github.io/posts/connect-gke-cluster-with-kubectl/</a>
+  </li>
+  <li class="post-copyright-license">
+      <strong>版权声明： </strong>本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-nd/4.0/" rel="noopener" target="_blank"><i class="fab fa-fw fa-creative-commons"></i>BY-NC-ND</a> 许可协议。转载请注明出处！
+  </li>
+</ul>
+</div>
+
+          <div class="post-tags">
+              <a href="/tags/kubernetes/" rel="tag"># kubernetes</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/posts/my-2022/" rel="prev" title="我的二零二二">
+                  <i class="fa fa-chevron-left"></i> 我的二零二二
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/posts/chatgpt-integate-external-data/" rel="next" title="ChatGPT与私有数据整合原理">
+                  ChatGPT与私有数据整合原理 <i class="fa fa-chevron-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+    
+  <div class="comments" id="disqus_thread">
+    <noscript>Please enable JavaScript to view the comments powered by Disqus.</noscript>
+  </div>
+  
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+
+<div class="copyright">
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Stephen Ni</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/" rel="noopener" target="_blank">NexT.Gemini</a> 强力驱动
+  </div>
+
+    </div>
+  </footer>
+
+  
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js" integrity="sha256-XL2inqUJaslATFnHdJOi9GfQ60on8Wx1C2H8DYiN1xY=" crossorigin="anonymous"></script>
+<script src="/js/comments.js"></script><script src="/js/utils.js"></script><script src="/js/motion.js"></script><script src="/js/next-boot.js"></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.4.1/search.js" integrity="sha256-1kfA5uHPf65M5cphT2dvymhkuyHPQp5A53EGZOnOLmc=" crossorigin="anonymous"></script>
+<script src="/js/third-party/search/local-search.js"></script>
+
+
+
+
+
+  
+
+
+
+
+<script class="next-config" data-name="disqus" type="application/json">{"enable":true,"shortname":"nisiyong","count":true,"i18n":{"disqus":"disqus"}}</script>
+<script src="/js/third-party/comments/disqus.js"></script>
+
+</body>
+</html>
