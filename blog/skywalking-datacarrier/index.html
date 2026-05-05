@@ -246,6 +246,7 @@ main[data-astro-cid-bvzihdzo]{width:calc(100% - 2em);max-width:100%;margin:0}.he
 <span class="line"><span style="color:#E1E4E8">}</span></span></code></pre>
 <p>如果某一瞬间有大量的并发请求，创建了大量的span，并且span都没有stop，span都存在栈中，那么内存是有可能存在大量的span导致OOM的。但是这种可能性是极小的，假设一个进程开了1000个线程，每个线程执行时包含了20个span，那么某一瞬间所有栈里存储的span最多也就20000个span，每个span的大小取决了存放的内容与扩张属性，一般来说这并不会耗费多少内存。默认参数加上稳定的插件基本上是没问题的，除非使用者使用很不合理，设置了极端的参数配置等。</p>
 <h2 id="总结">总结</h2>
-<p>回顾本文，主要讲述SkyWalking内部实现的轻量级内存队列原理，重点谈论了几个核心的对象，以及如何发送消息与消费消息。最后针对SkyWalking的TraceSegment设计所有简单描述。有兴趣的同学可以深入了解Apache SkyWalking各功能模块，对架构设计上会有很大的帮助，也可以参与社区的讨论交流，了解SkyWalking如何实践Apache的开源文化。</p>  </div> </article> </main> <footer data-astro-cid-sz7xmlte>
+<p>回顾本文，主要讲述SkyWalking内部实现的轻量级内存队列原理，重点谈论了几个核心的对象，以及如何发送消息与消费消息。最后针对SkyWalking的TraceSegment设计所有简单描述。有兴趣的同学可以深入了解Apache SkyWalking各功能模块，对架构设计上会有很大的帮助，也可以参与社区的讨论交流，了解SkyWalking如何实践Apache的开源文化。</p>  <script src="https://giscus.app/client.js" data-repo="nisiyong/nisiyong.github.io" data-repo-id="MDEwOlJlcG9zaXRvcnkzOTgzMTg1MjI=" data-category="General" data-category-id="DIC_kwDOF73bus4C8XoY" data-mapping="pathname" data-strict="0" data-reactions-enabled="1" data-emit-metadata="0" data-input-position="bottom" data-theme="light" data-lang="zh-CN" crossorigin="anonymous" async>
+</script> </div> </article> </main> <footer data-astro-cid-sz7xmlte>
 &copy; 2026 Stephen Ni. All rights reserved.
 </footer> </body></html>
