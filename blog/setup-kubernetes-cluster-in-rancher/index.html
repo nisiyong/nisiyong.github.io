@@ -1,0 +1,120 @@
+<!DOCTYPE html><html lang="en" data-astro-cid-bvzihdzo> <head><!-- Global Metadata --><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" type="image/svg+xml" href="/favicon.svg"><link rel="icon" href="/favicon.ico"><link rel="sitemap" href="/sitemap-index.xml"><link rel="alternate" type="application/rss+xml" title="Stephen Ni's Blog" href="https://nisiyong.com/rss.xml"><meta name="generator" content="Astro v6.1.1"><!-- Font preloads --><link rel="preload" href="/fonts/atkinson-regular.woff" as="font" type="font/woff" crossorigin><link rel="preload" href="/fonts/atkinson-bold.woff" as="font" type="font/woff" crossorigin><!-- Canonical URL --><link rel="canonical" href="https://nisiyong.com/blog/setup-kubernetes-cluster-in-rancher/"><!-- Primary Meta Tags --><title>使用Rancher快速搭建Kubernetes集群</title><meta name="title" content="使用Rancher快速搭建Kubernetes集群"><meta name="description" content="使用 Rancher 快速搭建 Kubernetes 集群的实践指南"><!-- Open Graph / Facebook --><meta property="og:type" content="website"><meta property="og:url" content="https://nisiyong.com/blog/setup-kubernetes-cluster-in-rancher/"><meta property="og:title" content="使用Rancher快速搭建Kubernetes集群"><meta property="og:description" content="使用 Rancher 快速搭建 Kubernetes 集群的实践指南"><meta property="og:image" content="https://nisiyong.com/_astro/blog-placeholder-1.Bx0Zcyzv.jpg"><!-- Twitter --><meta property="twitter:card" content="summary_large_image"><meta property="twitter:url" content="https://nisiyong.com/blog/setup-kubernetes-cluster-in-rancher/"><meta property="twitter:title" content="使用Rancher快速搭建Kubernetes集群"><meta property="twitter:description" content="使用 Rancher 快速搭建 Kubernetes 集群的实践指南"><meta property="twitter:image" content="https://nisiyong.com/_astro/blog-placeholder-1.Bx0Zcyzv.jpg"><style>:root{--accent: #3b82f6;--accent-dark: #2563eb;--black: 15, 18, 25;--gray: 96, 115, 159;--gray-light: 229, 233, 240;--gray-dark: 34, 41, 57;--gray-gradient: rgba(var(--gray-light), 50%), #fff;--box-shadow: 0 2px 6px rgba(var(--gray), 25%), 0 8px 24px rgba(var(--gray), 33%), 0 16px 32px rgba(var(--gray), 33%)}@font-face{font-family:Atkinson;src:url(/fonts/atkinson-regular.woff) format("woff");font-weight:400;font-style:normal;font-display:swap}@font-face{font-family:Atkinson;src:url(/fonts/atkinson-bold.woff) format("woff");font-weight:700;font-style:normal;font-display:swap}body{font-family:Atkinson,sans-serif;margin:0;padding:0;text-align:left;background:linear-gradient(var(--gray-gradient)) no-repeat;background-size:100% 600px;word-wrap:break-word;overflow-wrap:break-word;color:rgb(var(--gray-dark));font-size:17px;line-height:1.7}main{width:720px;max-width:calc(100% - 2em);margin:auto;padding:3em 1em}h1,h2,h3,h4,h5,h6{margin:0 0 .75rem;color:rgb(var(--black));line-height:1.3}h1{font-size:1.75em}h2{font-size:1.5em}h3{font-size:1.25em}h4{font-size:1.1em}h5{font-size:1em}strong,b{font-weight:700}a,a:hover{color:var(--accent)}p{margin-bottom:1em}.prose p{margin-bottom:1.25em}textarea{width:100%;font-size:16px}input{font-size:16px}table{width:100%}img{max-width:100%;height:auto;border-radius:8px}code{padding:2px 5px;background-color:rgb(var(--gray-light));border-radius:2px}pre{padding:1.5em;border-radius:8px;max-height:50vh;overflow:auto}pre>code{all:unset}blockquote{border-left:4px solid var(--accent);padding:0 0 0 20px;margin:0;font-size:1.333em}hr{border:none;border-top:1px solid rgb(var(--gray-light))}@media(max-width:720px){body{font-size:18px}main{padding:1em}}.sr-only{border:0;padding:0;margin:0;position:absolute!important;height:1px;width:1px;overflow:hidden;clip:rect(1px 1px 1px 1px);clip:rect(1px,1px,1px,1px);clip-path:inset(50%);white-space:nowrap}footer[data-astro-cid-sz7xmlte]{padding:2em 1em;background:linear-gradient(var(--gray-gradient)) no-repeat;color:rgb(var(--gray));text-align:center}a[data-astro-cid-eimmu3lg]{display:inline-block;text-decoration:none}a[data-astro-cid-eimmu3lg].active{font-weight:bolder;text-decoration:underline}header[data-astro-cid-3ef6ksr2]{margin:0;padding:0 1em;background:#fff;box-shadow:0 2px 8px rgba(var(--black),5%)}h2[data-astro-cid-3ef6ksr2]{margin:0;font-size:1em}h2[data-astro-cid-3ef6ksr2] a[data-astro-cid-3ef6ksr2],h2[data-astro-cid-3ef6ksr2] a[data-astro-cid-3ef6ksr2].active{text-decoration:none}nav[data-astro-cid-3ef6ksr2]{display:flex;align-items:center;justify-content:space-between}nav[data-astro-cid-3ef6ksr2] a[data-astro-cid-3ef6ksr2]{padding:1em .5em;color:var(--black);border-bottom:4px solid transparent;text-decoration:none}nav[data-astro-cid-3ef6ksr2] a[data-astro-cid-3ef6ksr2].active{text-decoration:none;border-bottom-color:var(--accent)}
+main[data-astro-cid-bvzihdzo]{width:calc(100% - 2em);max-width:100%;margin:0}.hero-image[data-astro-cid-bvzihdzo]{width:100%}.hero-image[data-astro-cid-bvzihdzo] img[data-astro-cid-bvzihdzo]{display:block;margin:0 auto;border-radius:12px;box-shadow:var(--box-shadow)}.prose[data-astro-cid-bvzihdzo]{width:680px;max-width:calc(100% - 2em);margin:auto;padding:.5em 1em 3em;color:rgb(var(--gray-dark))}.prose[data-astro-cid-bvzihdzo] p{margin-bottom:1.25em;line-height:1.7}.prose[data-astro-cid-bvzihdzo] h2{margin-top:1.25em;margin-bottom:.5em}.prose[data-astro-cid-bvzihdzo] h3{margin-top:1em;margin-bottom:.4em}.title[data-astro-cid-bvzihdzo]{margin-bottom:.75em;padding:0 0 .75em;text-align:center;line-height:1.3}.title[data-astro-cid-bvzihdzo] h1[data-astro-cid-bvzihdzo]{margin:0 0 .4em;font-size:1.75em}.date[data-astro-cid-bvzihdzo]{margin-bottom:.75em;color:rgb(var(--gray));font-family:SF Mono,Monaco,Inconsolata,Fira Code,monospace;font-size:.875rem}.last-updated-on[data-astro-cid-bvzihdzo]{font-style:italic}.code-block-wrapper{position:relative}.copy-button{position:absolute;top:.5rem;right:.5rem;padding:.25rem .75rem;background:rgb(var(--gray-light));border:1px solid rgb(var(--gray));border-radius:4px;font-size:.75rem;cursor:pointer;transition:all .2s ease;color:rgb(var(--gray-dark));opacity:0;pointer-events:none}.code-block-wrapper:hover .copy-button{opacity:1;pointer-events:auto}.copy-button:hover{background:rgb(var(--accent));color:#fff;border-color:rgb(var(--accent))}.copy-button.copied{background:#10b981;color:#fff;border-color:#10b981}
+</style></head> <body data-astro-cid-bvzihdzo> <header data-astro-cid-3ef6ksr2> <nav data-astro-cid-3ef6ksr2> <h2 data-astro-cid-3ef6ksr2><a href="/" data-astro-cid-3ef6ksr2>Stephen Ni&#39;s Blog</a></h2> <div class="internal-links" data-astro-cid-3ef6ksr2> <a href="/" data-astro-cid-3ef6ksr2="true" data-astro-cid-eimmu3lg> Home </a> <a href="/blog" class="active" data-astro-cid-3ef6ksr2="true" data-astro-cid-eimmu3lg> Blog </a> <a href="/about" data-astro-cid-3ef6ksr2="true" data-astro-cid-eimmu3lg> About </a> </div> </nav> </header> <script type="module">document.addEventListener("DOMContentLoaded",()=>{const n=()=>{document.querySelectorAll("pre").forEach(t=>{if(t.parentElement?.classList.contains("code-block-wrapper"))return;const o=document.createElement("div");o.className="code-block-wrapper";const e=document.createElement("button");e.className="copy-button",e.textContent="复制",e.setAttribute("aria-label","复制代码"),e.addEventListener("click",async()=>{const r=t.querySelector("code").textContent;try{await navigator.clipboard.writeText(r),e.textContent="已复制!",e.classList.add("copied"),setTimeout(()=>{e.textContent="复制",e.classList.remove("copied")},2e3)}catch{e.textContent="失败",setTimeout(()=>{e.textContent="复制"},2e3)}}),t.parentNode.insertBefore(o,t),o.appendChild(t),o.appendChild(e)})};n(),new MutationObserver(()=>{n()}).observe(document.body,{childList:!0,subtree:!0})});</script> <script type="module">document.addEventListener("DOMContentLoaded",()=>{document.querySelectorAll(".prose img").forEach(o=>{o.style.cursor="pointer",o.addEventListener("click",()=>{const e=document.createElement("div");e.className="lightbox-overlay",e.style.cssText=`
+				position: fixed;
+				top: 0;
+				left: 0;
+				width: 100%;
+				height: 100%;
+				background: rgba(0, 0, 0, 0.9);
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				z-index: 9999;
+				cursor: pointer;
+				opacity: 0;
+				transition: opacity 0.3s ease;
+			`;const n=document.createElement("img");n.src=o.src,n.style.cssText=`
+				max-width: 90%;
+				max-height: 90%;
+				object-fit: contain;
+				border-radius: 8px;
+				box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+			`;const t=document.createElement("button");t.innerHTML="×",t.className="lightbox-close",t.style.cssText=`
+				position: absolute;
+				top: 20px;
+				right: 30px;
+				background: rgba(255, 255, 255, 0.2);
+				border: none;
+				color: white;
+				font-size: 40px;
+				cursor: pointer;
+				padding: 10px 20px;
+				border-radius: 5px;
+				transition: background 0.3s ease;
+			`,t.addEventListener("mouseenter",()=>{t.style.background="rgba(255, 255, 255, 0.3)"}),t.addEventListener("mouseleave",()=>{t.style.background="rgba(255, 255, 255, 0.2)"});const s=()=>{e.style.opacity="0",setTimeout(()=>{document.body.removeChild(e)},300)};e.addEventListener("click",s),t.addEventListener("click",s);const i=r=>{r.key==="Escape"&&(s(),document.removeEventListener("keydown",i))};document.addEventListener("keydown",i),e.appendChild(n),e.appendChild(t),document.body.appendChild(e),setTimeout(()=>{e.style.opacity="1"},10)})})});</script> <script type="module" src="/_astro/BlogPost.astro_astro_type_script_index_2_lang.CT6CDXPs.js"></script> <main data-astro-cid-bvzihdzo> <article data-astro-cid-bvzihdzo> <div class="hero-image" data-astro-cid-bvzihdzo>  </div> <div class="prose" data-astro-cid-bvzihdzo> <div class="title" data-astro-cid-bvzihdzo> <h1 data-astro-cid-bvzihdzo>使用Rancher快速搭建Kubernetes集群</h1> <div class="date" data-astro-cid-bvzihdzo> 2022-02-09  </div> <hr data-astro-cid-bvzihdzo> </div>  <p>最早在推动公司应用容器化过程一直使用内部的容器云平台，由于内部的容器云平台做了一层封装，对 Kubernetes 一些原生的功能开放性不足。近期准备调研 Service Mesh，需要一套干净的 Kubernetes 集群作为 POC 环境做测试，通过查找一些资料，最终选择了用 Rancher 来搭建 Kubernetes，花了半天就搭建完成了。现在搭建一套 Kubernetes 集群来测试学习还是挺方便的，这里做些记录分享，尽管这类型的内容比较容易过时，还是希望对读者有些帮助。</p>
+<!-- more -->
+<h2 id="预备知识">预备知识</h2>
+<h3 id="kubernetes组件">Kubernetes组件</h3>
+<p>通过官方文档 <a href="https://kubernetes.io/docs/concepts/overview/components/">Kubernetes Components</a> 可以了解到1个 Kubernetes 集群通常用多个节点组成，这些节点主要分为两类：</p>
+<ol>
+<li><strong>Control Plane 节点</strong>：Control Plane 节点包含许多组件，主要负责整个集群的决策，管理所有 Worker 节点，响应处理集群的事件等等。为了高可用一般都会部署多个 Control Plane 节点，并且相关的组件一般部署在同一台服务器上。</li>
+<li><strong>Worker 节点</strong>：主要包含 kubelet 组件和 kube-proxy 组件，一般会有多个节点，kubelet 与 Control Plane 的 API server 交互，负责处理 Worker Node 的所有 Pod，而 kube-proxy 则负责该节点的网络规则，流量转发等。</li>
+</ol>
+<p>以下是官方的架构概览图，可以通过官方文档详细了解。</p>
+<p><img alt="image-20220209142312578" loading="lazy" decoding="async"  width="1252" height="585" src="/_astro/image-20220209142312578.C3lPGX8I_ZxxAEn.webp" ></p>
+<h3 id="rancher架构">Rancher架构</h3>
+<p>Rancher 是在 Kubernetes 之上更加抽象的一个平台，它让企业更加方便地构建 Kubernetes 集群，用户可以通过 Rancher Kubernetes Engine (RKE) 以图形化的方式快速搭建多个 Kubernetes 集群，还可以结合云厂商的来创建集群等等。用户搭建一个 Rancher Server 就可以标准化地管理多个 Kubernetes 集群，这很大程度上节省了大量的运维成本。</p>
+<p>Rancher Server 的部署方式可以分为两种：</p>
+<ol>
+<li><strong>集群部署</strong>：在生产环境推荐这种使用高可用集群方式部署，Rancher 管理着多个 Kubernetes 集群的，自身的可用性需要做好保障。使用集群部署的方式一般是在一个已有的 Kubernetes 集群上部署，建议这个 Kubernetes 集群专门用来部署 Rancher。</li>
+<li><strong>单节点部署</strong>：在开发测试环境资源有限的情况下，可以在一台安装有 Docker 环境的服务器上，快速搭建单节点的 Rancher，再通过 Rancher 管理多台服务器来创建 Kubernetes 集群。</li>
+</ol>
+<blockquote>
+<p>先搭建 Rancher 后再搭建 Kubernetes，还是先搭建 Kubernetes 再搭建 Rancher？这个问题有点像“鸡生蛋还是蛋生鸡”，一开始我也有点困惑。但是如果在生产环境操作，就强烈建议先有一套专门的小 Kubernetes 集群来部署 Rancher。</p>
+</blockquote>
+<p>以下是官方Rancher的架构图，可以结合官方文档熟悉了解。<a href="https://rancher.com/docs/rancher/v2.0-v2.4/en/overview/architecture/">Rancher Server Architecture</a></p>
+<p><img alt="image-20220209141942864" loading="lazy" decoding="async"  width="766" height="792" src="/_astro/image-20220209141942864.BZ8rn3BA_rWprQ.webp" ></p>
+<h2 id="部署步骤">部署步骤</h2>
+<p>由于这里搭建 Kubernetes 集群主要是为了开发测试使用，固采用简单的单节点 Docker 的方式来部署 Rancher，Kubernetes 集群则采用3个节点集群的高可用方式来部署。</p>
+<h3 id="准备3台虚拟机">准备3台虚拟机</h3>
+<ul>
+<li>10.0.0.1：计划安装单机版 Rancher，并作为 Kubernetes 集群的 Control Plane 节点</li>
+<li>10.0.0.2：作为 Kubernetes 集群的 Worker 节点</li>
+<li>10.0.0.3：作为 Kubernetes 集群的 Worker 节点</li>
+</ul>
+<p><strong>相关说明</strong></p>
+<ol>
+<li>以上3台机器均为8核16G，使用 CentOS 7 操作系统</li>
+<li>注意必须禁用交换内存，注释 <code>/etc/fstab</code> 含 swap 关键字的行后重启机器即可</li>
+<li>注意3台机器的 hostname 需要设置成不一样，修改 <code>/etc/hostname</code> 即可</li>
+<li>更多前期准备可以参考 <a href="https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/#before-you-begin">Installing kubeadm#Before you begin</a>。</li>
+</ol>
+<h3 id="安装docker">安装Docker</h3>
+<p>目前使用 Docker 作为容器运行时，分别在3台机器上安装 Docker，安装过程非常简单，自行参照官方文档进行安装。<a href="https://docs.docker.com/engine/install/centos/">Install Docker Engine</a></p>
+<p>安装完毕后启动 Docker 并设置默认开机启动 Docker，执行以下命令：</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#B392F0">systemctl</span><span style="color:#9ECBFF"> start</span><span style="color:#9ECBFF"> docker</span></span>
+<span class="line"><span style="color:#B392F0">systemctl</span><span style="color:#9ECBFF"> enable</span><span style="color:#9ECBFF"> docker</span></span></code></pre>
+<h3 id="安装rancher">安装Rancher</h3>
+<p>参照官网文档 <a href="https://rancher.com/docs/rancher/v2.0-v2.4/en/installation/other-installation-methods/single-node-docker/">Installing Rancher on a Single Node Using Docker</a> 的第一种方式，当然最好指定下版本号，如我使用 <code>rancher/rancher:v2.5.12</code>。</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#B392F0">docker</span><span style="color:#9ECBFF"> run</span><span style="color:#79B8FF"> -d</span><span style="color:#79B8FF"> --name</span><span style="color:#9ECBFF"> rancher</span><span style="color:#79B8FF"> --restart=unless-stopped</span><span style="color:#79B8FF"> \</span></span>
+<span class="line"><span style="color:#79B8FF">  -p</span><span style="color:#9ECBFF"> 80:80</span><span style="color:#79B8FF"> -p</span><span style="color:#9ECBFF"> 443:443</span><span style="color:#79B8FF"> \</span></span>
+<span class="line"><span style="color:#9ECBFF">  rancher/rancher:v2.5.12</span></span></code></pre>
+<p>可以通过 <code>docker logs -f rancher</code> 查看标准输出日志，等待一段时间初始化完毕后就可以打开浏览器访问网页 <a href="http://10.0.0.1">http://10.0.0.1</a> 。设置下admin密码后就可以开始使用 Rancher 管理端了。</p>
+<h3 id="创建-kubertetes-集群">创建 Kubertetes 集群</h3>
+<p>Rancher 创建 Kubernetes 集群也非常多傻瓜式，这里不重复细节，依据官方文档设置来即可。<a href="https://rancher.com/docs/rancher/v2.6/en/quick-start-guide/deployment/quickstart-manual-setup/">Rancher Manual Quick Start</a></p>
+<p><img alt="image-20220209174214150" loading="lazy" decoding="async"  width="2760" height="1672" src="/_astro/image-20220209174214150.XJqm2ssu_Z21PDYx.webp" ></p>
+<p>勾选Kubernetes 的节点角色后 Rancher 会生成一些命令，直接拷贝命令到对应的机器运行。在这里提供下我节点角色的分配以供参考：</p>
+<ul>
+<li>10.0.0.1: etcd, Control Plane, Worker</li>
+<li>10.0.0.2: Worker</li>
+<li>10.0.0.3: Worker</li>
+</ul>
+<p>等待各个节点的初始化完成注册后，在 Rancher 就可以看到集群已经就绪可用的状态。</p>
+<p><img alt="image-20220209175206103" loading="lazy" decoding="async"  width="2764" height="1628" src="/_astro/image-20220209175206103.Boib_80A_Z2hCxQ9.webp" ></p>
+<h3 id="安装-rancher-clikubectl">安装 Rancher CLI，kubectl</h3>
+<p>最后为了方便本地通过终端工具操作 Rancher 及 Kubernetes 集群，建议安装相应的CLI工具，以下相关文档 <a href="https://rancher.com/docs/rancher/v2.6/en/quick-start-guide/cli/">CLI with Rancher</a> 自行安装。安装完毕后接可以愉快的玩耍了。</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#B392F0">➜</span><span style="color:#9ECBFF">  ~</span><span style="color:#9ECBFF"> rancher</span><span style="color:#9ECBFF"> nodes</span></span>
+<span class="line"><span style="color:#B392F0">ID</span><span style="color:#9ECBFF">                       NAME</span><span style="color:#9ECBFF">            STATE</span><span style="color:#9ECBFF">     POOL</span><span style="color:#9ECBFF">      DESCRIPTION</span></span>
+<span class="line"><span style="color:#B392F0">c-rhnr4:m-924c09dacfb5</span><span style="color:#9ECBFF">   devserv-01</span><span style="color:#9ECBFF">   active</span></span>
+<span class="line"><span style="color:#B392F0">c-rhnr4:m-8842c2782391</span><span style="color:#9ECBFF">   devserv-02</span><span style="color:#9ECBFF">   active</span></span>
+<span class="line"><span style="color:#B392F0">c-rhnr4:m-286a6c78bd24</span><span style="color:#9ECBFF">   devserv-03</span><span style="color:#9ECBFF">   active</span></span>
+<span class="line"><span style="color:#B392F0">➜</span><span style="color:#9ECBFF">  ~</span></span>
+<span class="line"><span style="color:#B392F0">➜</span><span style="color:#9ECBFF">  ~</span><span style="color:#9ECBFF"> kubectl</span><span style="color:#9ECBFF"> get</span><span style="color:#9ECBFF"> nodes</span></span>
+<span class="line"><span style="color:#B392F0">NAME</span><span style="color:#9ECBFF">            STATUS</span><span style="color:#9ECBFF">   ROLES</span><span style="color:#9ECBFF">                      AGE</span><span style="color:#9ECBFF">   VERSION</span></span>
+<span class="line"><span style="color:#B392F0">devserv-01</span><span style="color:#9ECBFF">			Ready</span><span style="color:#9ECBFF">    controlplane,etcd,worker</span><span style="color:#9ECBFF">   25h</span><span style="color:#9ECBFF">   v1.20.14</span></span>
+<span class="line"><span style="color:#B392F0">devserv-02</span><span style="color:#9ECBFF">			Ready</span><span style="color:#9ECBFF">    worker</span><span style="color:#9ECBFF">                     24h</span><span style="color:#9ECBFF">   v1.20.14</span></span>
+<span class="line"><span style="color:#B392F0">devserv-03</span><span style="color:#9ECBFF">			Ready</span><span style="color:#9ECBFF">    worker</span><span style="color:#9ECBFF">                     24h</span><span style="color:#9ECBFF">   v1.20.14</span></span>
+<span class="line"><span style="color:#B392F0">➜</span><span style="color:#9ECBFF">  ~</span></span></code></pre>
+<h2 id="总结">总结</h2>
+<p>未来是 Kubernetes 的天下，会有很多云原生相关技术，有一套开发测试环境能快速了解一些技术原理及相关机制，利用好技术红利能帮助企业大大地提高效率及降低成本。也许这内容容易过时，毕竟技术更新迭代太快了，但是这是了解云原生技术的第一步，现在搭建环境已经不是什么难事，唯一要做的就是仔细阅读官方文档，最好不要从其他人的博客文章来获取搭建步骤，当然也包括本文。这里仅作为搭建过程的参考，希望你能通过官方文档自己完成集群的搭建。</p>
+<h2 id="references">References</h2>
+<ul>
+<li>Kubernetes Components, <a href="https://kubernetes.io/docs/concepts/overview/components/">https://kubernetes.io/docs/concepts/overview/components/</a></li>
+<li>Rancher Architecture, <a href="https://rancher.com/docs/rancher/v2.0-v2.4/en/overview/architecture/">https://rancher.com/docs/rancher/v2.0-v2.4/en/overview/architecture/</a></li>
+<li>Install Docker Engine, <a href="https://docs.docker.com/engine/install/">https://docs.docker.com/engine/install/</a></li>
+<li>Installing Rancher on a Single Node Using Docker, <a href="https://rancher.com/docs/rancher/v2.6/en/installation/other-installation-methods/single-node-docker/">https://rancher.com/docs/rancher/v2.6/en/installation/other-installation-methods/single-node-docker/</a></li>
+<li>Bootstrapping clusters with kubeadm, <a href="https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/">https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/</a></li>
+</ul>  </div> </article> </main> <footer data-astro-cid-sz7xmlte>
+&copy; 2026 Stephen Ni. All rights reserved.
+</footer> </body></html>

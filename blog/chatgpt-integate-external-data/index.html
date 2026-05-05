@@ -1,0 +1,115 @@
+<!DOCTYPE html><html lang="en" data-astro-cid-bvzihdzo> <head><!-- Global Metadata --><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" type="image/svg+xml" href="/favicon.svg"><link rel="icon" href="/favicon.ico"><link rel="sitemap" href="/sitemap-index.xml"><link rel="alternate" type="application/rss+xml" title="Stephen Ni's Blog" href="https://nisiyong.com/rss.xml"><meta name="generator" content="Astro v6.1.1"><!-- Font preloads --><link rel="preload" href="/fonts/atkinson-regular.woff" as="font" type="font/woff" crossorigin><link rel="preload" href="/fonts/atkinson-bold.woff" as="font" type="font/woff" crossorigin><!-- Canonical URL --><link rel="canonical" href="https://nisiyong.com/blog/chatgpt-integate-external-data/"><!-- Primary Meta Tags --><title>ChatGPT与私有数据整合原理</title><meta name="title" content="ChatGPT与私有数据整合原理"><meta name="description" content="ChatGPT与私有数据整合原理，介绍如何利用 Embeddings 模型绕过 token 限制整合私有化数据"><!-- Open Graph / Facebook --><meta property="og:type" content="website"><meta property="og:url" content="https://nisiyong.com/blog/chatgpt-integate-external-data/"><meta property="og:title" content="ChatGPT与私有数据整合原理"><meta property="og:description" content="ChatGPT与私有数据整合原理，介绍如何利用 Embeddings 模型绕过 token 限制整合私有化数据"><meta property="og:image" content="https://nisiyong.com/_astro/blog-placeholder-1.Bx0Zcyzv.jpg"><!-- Twitter --><meta property="twitter:card" content="summary_large_image"><meta property="twitter:url" content="https://nisiyong.com/blog/chatgpt-integate-external-data/"><meta property="twitter:title" content="ChatGPT与私有数据整合原理"><meta property="twitter:description" content="ChatGPT与私有数据整合原理，介绍如何利用 Embeddings 模型绕过 token 限制整合私有化数据"><meta property="twitter:image" content="https://nisiyong.com/_astro/blog-placeholder-1.Bx0Zcyzv.jpg"><style>:root{--accent: #3b82f6;--accent-dark: #2563eb;--black: 15, 18, 25;--gray: 96, 115, 159;--gray-light: 229, 233, 240;--gray-dark: 34, 41, 57;--gray-gradient: rgba(var(--gray-light), 50%), #fff;--box-shadow: 0 2px 6px rgba(var(--gray), 25%), 0 8px 24px rgba(var(--gray), 33%), 0 16px 32px rgba(var(--gray), 33%)}@font-face{font-family:Atkinson;src:url(/fonts/atkinson-regular.woff) format("woff");font-weight:400;font-style:normal;font-display:swap}@font-face{font-family:Atkinson;src:url(/fonts/atkinson-bold.woff) format("woff");font-weight:700;font-style:normal;font-display:swap}body{font-family:Atkinson,sans-serif;margin:0;padding:0;text-align:left;background:linear-gradient(var(--gray-gradient)) no-repeat;background-size:100% 600px;word-wrap:break-word;overflow-wrap:break-word;color:rgb(var(--gray-dark));font-size:17px;line-height:1.7}main{width:720px;max-width:calc(100% - 2em);margin:auto;padding:3em 1em}h1,h2,h3,h4,h5,h6{margin:0 0 .75rem;color:rgb(var(--black));line-height:1.3}h1{font-size:1.75em}h2{font-size:1.5em}h3{font-size:1.25em}h4{font-size:1.1em}h5{font-size:1em}strong,b{font-weight:700}a,a:hover{color:var(--accent)}p{margin-bottom:1em}.prose p{margin-bottom:1.25em}textarea{width:100%;font-size:16px}input{font-size:16px}table{width:100%}img{max-width:100%;height:auto;border-radius:8px}code{padding:2px 5px;background-color:rgb(var(--gray-light));border-radius:2px}pre{padding:1.5em;border-radius:8px;max-height:50vh;overflow:auto}pre>code{all:unset}blockquote{border-left:4px solid var(--accent);padding:0 0 0 20px;margin:0;font-size:1.333em}hr{border:none;border-top:1px solid rgb(var(--gray-light))}@media(max-width:720px){body{font-size:18px}main{padding:1em}}.sr-only{border:0;padding:0;margin:0;position:absolute!important;height:1px;width:1px;overflow:hidden;clip:rect(1px 1px 1px 1px);clip:rect(1px,1px,1px,1px);clip-path:inset(50%);white-space:nowrap}footer[data-astro-cid-sz7xmlte]{padding:2em 1em;background:linear-gradient(var(--gray-gradient)) no-repeat;color:rgb(var(--gray));text-align:center}a[data-astro-cid-eimmu3lg]{display:inline-block;text-decoration:none}a[data-astro-cid-eimmu3lg].active{font-weight:bolder;text-decoration:underline}header[data-astro-cid-3ef6ksr2]{margin:0;padding:0 1em;background:#fff;box-shadow:0 2px 8px rgba(var(--black),5%)}h2[data-astro-cid-3ef6ksr2]{margin:0;font-size:1em}h2[data-astro-cid-3ef6ksr2] a[data-astro-cid-3ef6ksr2],h2[data-astro-cid-3ef6ksr2] a[data-astro-cid-3ef6ksr2].active{text-decoration:none}nav[data-astro-cid-3ef6ksr2]{display:flex;align-items:center;justify-content:space-between}nav[data-astro-cid-3ef6ksr2] a[data-astro-cid-3ef6ksr2]{padding:1em .5em;color:var(--black);border-bottom:4px solid transparent;text-decoration:none}nav[data-astro-cid-3ef6ksr2] a[data-astro-cid-3ef6ksr2].active{text-decoration:none;border-bottom-color:var(--accent)}
+main[data-astro-cid-bvzihdzo]{width:calc(100% - 2em);max-width:100%;margin:0}.hero-image[data-astro-cid-bvzihdzo]{width:100%}.hero-image[data-astro-cid-bvzihdzo] img[data-astro-cid-bvzihdzo]{display:block;margin:0 auto;border-radius:12px;box-shadow:var(--box-shadow)}.prose[data-astro-cid-bvzihdzo]{width:680px;max-width:calc(100% - 2em);margin:auto;padding:.5em 1em 3em;color:rgb(var(--gray-dark))}.prose[data-astro-cid-bvzihdzo] p{margin-bottom:1.25em;line-height:1.7}.prose[data-astro-cid-bvzihdzo] h2{margin-top:1.25em;margin-bottom:.5em}.prose[data-astro-cid-bvzihdzo] h3{margin-top:1em;margin-bottom:.4em}.title[data-astro-cid-bvzihdzo]{margin-bottom:.75em;padding:0 0 .75em;text-align:center;line-height:1.3}.title[data-astro-cid-bvzihdzo] h1[data-astro-cid-bvzihdzo]{margin:0 0 .4em;font-size:1.75em}.date[data-astro-cid-bvzihdzo]{margin-bottom:.75em;color:rgb(var(--gray));font-family:SF Mono,Monaco,Inconsolata,Fira Code,monospace;font-size:.875rem}.last-updated-on[data-astro-cid-bvzihdzo]{font-style:italic}.code-block-wrapper{position:relative}.copy-button{position:absolute;top:.5rem;right:.5rem;padding:.25rem .75rem;background:rgb(var(--gray-light));border:1px solid rgb(var(--gray));border-radius:4px;font-size:.75rem;cursor:pointer;transition:all .2s ease;color:rgb(var(--gray-dark));opacity:0;pointer-events:none}.code-block-wrapper:hover .copy-button{opacity:1;pointer-events:auto}.copy-button:hover{background:rgb(var(--accent));color:#fff;border-color:rgb(var(--accent))}.copy-button.copied{background:#10b981;color:#fff;border-color:#10b981}
+</style></head> <body data-astro-cid-bvzihdzo> <header data-astro-cid-3ef6ksr2> <nav data-astro-cid-3ef6ksr2> <h2 data-astro-cid-3ef6ksr2><a href="/" data-astro-cid-3ef6ksr2>Stephen Ni&#39;s Blog</a></h2> <div class="internal-links" data-astro-cid-3ef6ksr2> <a href="/" data-astro-cid-3ef6ksr2="true" data-astro-cid-eimmu3lg> Home </a> <a href="/blog" class="active" data-astro-cid-3ef6ksr2="true" data-astro-cid-eimmu3lg> Blog </a> <a href="/about" data-astro-cid-3ef6ksr2="true" data-astro-cid-eimmu3lg> About </a> </div> </nav> </header> <script type="module">document.addEventListener("DOMContentLoaded",()=>{const n=()=>{document.querySelectorAll("pre").forEach(t=>{if(t.parentElement?.classList.contains("code-block-wrapper"))return;const o=document.createElement("div");o.className="code-block-wrapper";const e=document.createElement("button");e.className="copy-button",e.textContent="复制",e.setAttribute("aria-label","复制代码"),e.addEventListener("click",async()=>{const r=t.querySelector("code").textContent;try{await navigator.clipboard.writeText(r),e.textContent="已复制!",e.classList.add("copied"),setTimeout(()=>{e.textContent="复制",e.classList.remove("copied")},2e3)}catch{e.textContent="失败",setTimeout(()=>{e.textContent="复制"},2e3)}}),t.parentNode.insertBefore(o,t),o.appendChild(t),o.appendChild(e)})};n(),new MutationObserver(()=>{n()}).observe(document.body,{childList:!0,subtree:!0})});</script> <script type="module">document.addEventListener("DOMContentLoaded",()=>{document.querySelectorAll(".prose img").forEach(o=>{o.style.cursor="pointer",o.addEventListener("click",()=>{const e=document.createElement("div");e.className="lightbox-overlay",e.style.cssText=`
+				position: fixed;
+				top: 0;
+				left: 0;
+				width: 100%;
+				height: 100%;
+				background: rgba(0, 0, 0, 0.9);
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				z-index: 9999;
+				cursor: pointer;
+				opacity: 0;
+				transition: opacity 0.3s ease;
+			`;const n=document.createElement("img");n.src=o.src,n.style.cssText=`
+				max-width: 90%;
+				max-height: 90%;
+				object-fit: contain;
+				border-radius: 8px;
+				box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+			`;const t=document.createElement("button");t.innerHTML="×",t.className="lightbox-close",t.style.cssText=`
+				position: absolute;
+				top: 20px;
+				right: 30px;
+				background: rgba(255, 255, 255, 0.2);
+				border: none;
+				color: white;
+				font-size: 40px;
+				cursor: pointer;
+				padding: 10px 20px;
+				border-radius: 5px;
+				transition: background 0.3s ease;
+			`,t.addEventListener("mouseenter",()=>{t.style.background="rgba(255, 255, 255, 0.3)"}),t.addEventListener("mouseleave",()=>{t.style.background="rgba(255, 255, 255, 0.2)"});const s=()=>{e.style.opacity="0",setTimeout(()=>{document.body.removeChild(e)},300)};e.addEventListener("click",s),t.addEventListener("click",s);const i=r=>{r.key==="Escape"&&(s(),document.removeEventListener("keydown",i))};document.addEventListener("keydown",i),e.appendChild(n),e.appendChild(t),document.body.appendChild(e),setTimeout(()=>{e.style.opacity="1"},10)})})});</script> <script type="module" src="/_astro/BlogPost.astro_astro_type_script_index_2_lang.CT6CDXPs.js"></script> <main data-astro-cid-bvzihdzo> <article data-astro-cid-bvzihdzo> <div class="hero-image" data-astro-cid-bvzihdzo>  </div> <div class="prose" data-astro-cid-bvzihdzo> <div class="title" data-astro-cid-bvzihdzo> <h1 data-astro-cid-bvzihdzo>ChatGPT与私有数据整合原理</h1> <div class="date" data-astro-cid-bvzihdzo> 2023-03-28  </div> <hr data-astro-cid-bvzihdzo> </div>  <p>ChatGPT 的出现惊艳了世界，它通过了图灵测试，让人们分不清回答问题的是人还是机器。大家不甘于只在官方的对话页面问答，想利用 GPT 模型的自然语言能力结合私有数据做更多的应用场景，解决模型训练的数据不是实时的问题，同时也解决 OpenAI API tokens 限制的的问题。本文先来分析下这些基本问题如何解决，理解了这个基本原理，就能了解到 ChatGPT 衍生的很多产品，甚至去打造适合自己场景的应用。</p>
+<!-- more -->
+<h2 id="token-限制">Token 限制</h2>
+<p>OpenAI 提供了 OpenAPI 供第三方调用，但是无论你调用什么接口，每个模型都有对应的 token 数量限制，这意味着你不可能传输大量的数据。比如最新的 <a href="https://platform.openai.com/docs/models/gpt-4">gpt-4</a> 模型限制了 8,192 tokens，如果你想要提供大量的上下文信息后，这在单次的接口处理上是不可能的事情。</p>
+<p>这里可以通过 <a href="https://platform.openai.com/tokenizer">Tokenizer</a> 来计算你的文本对应的 token 数量，一般少量的 context 还是可以接受的，但是大量的 context 我们就得考虑接下来介绍的方法。</p>
+<h2 id="embeddings-模型">Embeddings 模型</h2>
+<p>OpenAI 提供的不仅仅是用于文本填充或问答的功能的 <strong>GPT</strong> 模型，还有其他许多模型。比如 <a href="https://platform.openai.com/docs/models/dall-e"><strong>DALL·E</strong></a> 模型可以根据文字生成图片，<a href="https://platform.openai.com/docs/models/whisper"><strong>Whisper</strong></a> 模型可以通过声音转换文本，<a href="https://platform.openai.com/docs/models/moderation"><strong>Moderation</strong></a> 可以通过文本内容识别是否涉及暴力等有害内容，还有一个 <a href="https://platform.openai.com/docs/guides/embeddings/"><strong>Embeddings</strong></a> 模型可以用于计算文本的关联性。</p>
+<p>那 Embeddings 模型计算文本的关联性可以用于什么场景呢？官方文档举了几个场景：</p>
+<ul>
+<li><strong>搜索</strong>（结果按查询字符串相关性排序）</li>
+<li><strong>聚类</strong>（按相似性分组文本字符串）</li>
+<li><strong>推荐</strong>（推荐具有相关文本字符串的项目）</li>
+<li><strong>异常检测</strong>（识别相关性较小的离群值）</li>
+<li><strong>多样性测量</strong>（分析相似性分布）</li>
+<li><strong>分类</strong>（按最相似的标签对文本字符串进行分类）</li>
+</ul>
+<p>接下来我们通过接口请求来看看这个模型是怎么使用的，首先我们把文本数据放到 <code>input</code> 字段里，这个字段也有 token 限制，如果是大文本还需要做些预处理切割。</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#B392F0">curl</span><span style="color:#9ECBFF"> https://api.openai.com/v1/embeddings</span><span style="color:#79B8FF"> \</span></span>
+<span class="line"><span style="color:#79B8FF">  -H</span><span style="color:#9ECBFF"> "Content-Type: application/json"</span><span style="color:#79B8FF"> \</span></span>
+<span class="line"><span style="color:#79B8FF">  -H</span><span style="color:#9ECBFF"> "Authorization: Bearer </span><span style="color:#E1E4E8">$OPENAI_API_KEY</span><span style="color:#9ECBFF">"</span><span style="color:#79B8FF"> \</span></span>
+<span class="line"><span style="color:#79B8FF">  -d</span><span style="color:#9ECBFF"> '{</span></span>
+<span class="line"><span style="color:#9ECBFF">    "input": "Your text string goes here",</span></span>
+<span class="line"><span style="color:#9ECBFF">    "model": "text-embedding-ada-002"</span></span>
+<span class="line"><span style="color:#9ECBFF">  }'</span></span></code></pre>
+<p>传入的文本后调用接口的响应内容里 <code>data.embedding</code> 就是我们要的数据，可以看出来这是一个浮点型数组，目前这个数组有 <code>1536</code> 个元素，这其实就是原始文本内容对应的向量。</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="json"><code><span class="line"><span style="color:#E1E4E8">{</span></span>
+<span class="line"><span style="color:#79B8FF">  "data"</span><span style="color:#E1E4E8">: [</span></span>
+<span class="line"><span style="color:#E1E4E8">    {</span></span>
+<span class="line"><span style="color:#79B8FF">      "embedding"</span><span style="color:#E1E4E8">: [</span></span>
+<span class="line"><span style="color:#79B8FF">        -0.006929283495992422</span><span style="color:#E1E4E8">,</span></span>
+<span class="line"><span style="color:#79B8FF">        -0.005336422007530928</span><span style="color:#E1E4E8">,</span></span>
+<span class="line"><span style="color:#FDAEB7;font-style:italic">        ...</span></span>
+<span class="line"><span style="color:#79B8FF">        -4.547132266452536e-05</span><span style="color:#E1E4E8">,</span></span>
+<span class="line"><span style="color:#79B8FF">        -0.024047505110502243</span></span>
+<span class="line"><span style="color:#E1E4E8">      ],</span></span>
+<span class="line"><span style="color:#79B8FF">      "index"</span><span style="color:#E1E4E8">: </span><span style="color:#79B8FF">0</span><span style="color:#E1E4E8">,</span></span>
+<span class="line"><span style="color:#79B8FF">      "object"</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"embedding"</span></span>
+<span class="line"><span style="color:#E1E4E8">    }</span></span>
+<span class="line"><span style="color:#E1E4E8">  ],</span></span>
+<span class="line"><span style="color:#79B8FF">  "model"</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"text-embedding-ada-002"</span><span style="color:#E1E4E8">,</span></span>
+<span class="line"><span style="color:#79B8FF">  "object"</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"list"</span><span style="color:#E1E4E8">,</span></span>
+<span class="line"><span style="color:#79B8FF">  "usage"</span><span style="color:#E1E4E8">: {</span></span>
+<span class="line"><span style="color:#79B8FF">    "prompt_tokens"</span><span style="color:#E1E4E8">: </span><span style="color:#79B8FF">5</span><span style="color:#E1E4E8">,</span></span>
+<span class="line"><span style="color:#79B8FF">    "total_tokens"</span><span style="color:#E1E4E8">: </span><span style="color:#79B8FF">5</span></span>
+<span class="line"><span style="color:#E1E4E8">  }</span></span>
+<span class="line"><span style="color:#E1E4E8">}</span></span></code></pre>
+<h2 id="向量相似性与数据库">向量相似性与数据库</h2>
+<p>原始文本被拆分成多个片段后，通过 Embeddings 模型生成对应的数字向量，我们需要提问的问题也可以生成向量，这样就可以找到问题与多个原始文本片段的相似性，再做个 rank，可以获得与这个问题相关度最高的文本片段。</p>
+<p>通过向量如何计算相似度呢？这里可以利用数学里的 <a href="https://zh.wikipedia.org/wiki/%E4%BD%99%E5%BC%A6%E7%9B%B8%E4%BC%BC%E6%80%A7">余弦相似性</a> 来计算，想象一下在二维空间里，两个向量的夹角越小，这两个向量的方向就越一致，也即相关度会越高。可以利用以下公式计算。</p>
+<p><img alt="image-20230328215424237" loading="lazy" decoding="async"  width="457" height="110" src="/_astro/image-20230328215424237.DzkXMM7W_gcqFh.webp" ></p>
+<p><img alt="image-20230328215432492" loading="lazy" decoding="async"  width="633" height="307" src="/_astro/image-20230328215432492.BuTeXrSl_ZVvWWy.webp" ></p>
+<p>但是在上面获取的向量并不是一个二维的向量，而是拥有 1536 个数据的向量，这个时候计算会复杂一点，当然我们可以不用自己计算，直接利用向量数据库即可。所以通过 Embedings 模型获取到的结果用常规的关系数据库如 MySQL 存储在计算时并不方便，需要专门的向量数据库。</p>
+<p>目前比较知名 vector database 的有：</p>
+<ul>
+<li><a href="https://www.pinecone.io/">Pinecone</a>，这个提供 Google Cloud 或 AWS 的托管服务</li>
+<li><a href="https://qdrant.tech/">Qdrant</a>，开源版及商业版都有</li>
+<li><a href="https://github.com/pgvector/pgvector">pgvector</a>，PostgreSQL 的扩展</li>
+<li>…</li>
+</ul>
+<p>其余的不太熟悉不一一列举，大家可以自行搜索 <code>vector database</code> 找到合适的向量数据库。利用好向量数据库存好 vector 和 payload，再利用好其查询接口就能获取相似度最高的 vector 和 payload。</p>
+<h2 id="私有数据整合">私有数据整合</h2>
+<p>通过上述的操作，我们已经可以把流程串起来了，下图是网友整合的一张交互流程图，这里做下简单的说明：</p>
+<ol>
+<li>首先对原始文本内容进行切割，保证不超过 Embeddings 模型的 tokens 限制，拆分成多个 chunk</li>
+<li>逐一对 chunk 调用 Embeddings 模型后获取对应的 vector 向量后，存储本地的向量数据库，关键的数据主要是 vector 值即 chunk 内容</li>
+<li>根据用户问题调用 Embeddings 模型后获取该问题的 vector，在本地向量数据库进行查询，可以获取相似度 TopN 的 chunks</li>
+<li>把 TopN 的 chucks 作为 chat 接口的 context，再加上用户问题作为 Prompt，通过 GPT 模型获取相应的结果</li>
+</ol>
+<p><img alt="image-20230328215444897" loading="lazy" decoding="async"  width="1751" height="1082" src="/_astro/image-20230328215444897.CokZaD5s_ZCAjv5.webp" ></p>
+<p>这里再补充说明下为什么通过这种方式能够做到整合的效果，核心的原理就是先利用问题在本地找到相关性最高的数据，然后再把数据放到 GPT 的 context 里，这个时候虽然模型是 2021 年训练的数据，却可以结合你上下文中你提供的资料来做问题的解答。相当于我们其实是通过 Embeddings 模型来过滤出跟这个问题相关的材料，再让 GPT 结合这些材料用自然语言表达出来。</p>
+<h2 id="总结">总结</h2>
+<p>本文主要讲述了如何基于 OpenAI 的 GPT 模型，绕过 tokens 限制从而整合私有化数据，通过此功能可以衍生出大量的应用，比如可以打造个人知识库问答，让 GPT 总结一本新书的内容，还有很多结合场景，后续可以介绍。上述的方案目前也无需自行实现，已经有相应的开源 LLM 框架做了封装，比如 <a href="https://python.langchain.com/">LangChain</a>，<a href="https://gpt-index.readthedocs.io/">LlamaIndex</a> 等，还有 OpenAI 新发布的 Chat Plugins 功能也是非常强大，后续可以介绍下。</p>
+<h2 id="references">References</h2>
+<ul>
+<li><a href="https://blog.langchain.dev/tutorial-chatgpt-over-your-data/">https://blog.langchain.dev/tutorial-chatgpt-over-your-data/</a></li>
+<li><a href="https://en.wikipedia.org/wiki/Cosine_similarity">https://en.wikipedia.org/wiki/Cosine_similarity</a></li>
+<li><a href="https://qdrant.tech/documentation/search/">https://qdrant.tech/documentation/search/</a></li>
+<li><a href="https://twitter-thread.com/t/1631779232455053313">https://twitter-thread.com/t/1631779232455053313</a></li>
+</ul>  </div> </article> </main> <footer data-astro-cid-sz7xmlte>
+&copy; 2026 Stephen Ni. All rights reserved.
+</footer> </body></html>

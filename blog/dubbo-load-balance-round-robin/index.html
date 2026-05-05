@@ -1,0 +1,223 @@
+<!DOCTYPE html><html lang="en" data-astro-cid-bvzihdzo> <head><!-- Global Metadata --><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" type="image/svg+xml" href="/favicon.svg"><link rel="icon" href="/favicon.ico"><link rel="sitemap" href="/sitemap-index.xml"><link rel="alternate" type="application/rss+xml" title="Stephen Ni's Blog" href="https://nisiyong.com/rss.xml"><meta name="generator" content="Astro v6.1.1"><!-- Font preloads --><link rel="preload" href="/fonts/atkinson-regular.woff" as="font" type="font/woff" crossorigin><link rel="preload" href="/fonts/atkinson-bold.woff" as="font" type="font/woff" crossorigin><!-- Canonical URL --><link rel="canonical" href="https://nisiyong.com/blog/dubbo-load-balance-round-robin/"><!-- Primary Meta Tags --><title>Dubbo负载均衡之加权轮训</title><meta name="title" content="Dubbo负载均衡之加权轮训"><meta name="description" content="Dubbo负载均衡之加权轮训算法原理与实现分析"><!-- Open Graph / Facebook --><meta property="og:type" content="website"><meta property="og:url" content="https://nisiyong.com/blog/dubbo-load-balance-round-robin/"><meta property="og:title" content="Dubbo负载均衡之加权轮训"><meta property="og:description" content="Dubbo负载均衡之加权轮训算法原理与实现分析"><meta property="og:image" content="https://nisiyong.com/_astro/blog-placeholder-1.Bx0Zcyzv.jpg"><!-- Twitter --><meta property="twitter:card" content="summary_large_image"><meta property="twitter:url" content="https://nisiyong.com/blog/dubbo-load-balance-round-robin/"><meta property="twitter:title" content="Dubbo负载均衡之加权轮训"><meta property="twitter:description" content="Dubbo负载均衡之加权轮训算法原理与实现分析"><meta property="twitter:image" content="https://nisiyong.com/_astro/blog-placeholder-1.Bx0Zcyzv.jpg"><style>:root{--accent: #3b82f6;--accent-dark: #2563eb;--black: 15, 18, 25;--gray: 96, 115, 159;--gray-light: 229, 233, 240;--gray-dark: 34, 41, 57;--gray-gradient: rgba(var(--gray-light), 50%), #fff;--box-shadow: 0 2px 6px rgba(var(--gray), 25%), 0 8px 24px rgba(var(--gray), 33%), 0 16px 32px rgba(var(--gray), 33%)}@font-face{font-family:Atkinson;src:url(/fonts/atkinson-regular.woff) format("woff");font-weight:400;font-style:normal;font-display:swap}@font-face{font-family:Atkinson;src:url(/fonts/atkinson-bold.woff) format("woff");font-weight:700;font-style:normal;font-display:swap}body{font-family:Atkinson,sans-serif;margin:0;padding:0;text-align:left;background:linear-gradient(var(--gray-gradient)) no-repeat;background-size:100% 600px;word-wrap:break-word;overflow-wrap:break-word;color:rgb(var(--gray-dark));font-size:17px;line-height:1.7}main{width:720px;max-width:calc(100% - 2em);margin:auto;padding:3em 1em}h1,h2,h3,h4,h5,h6{margin:0 0 .75rem;color:rgb(var(--black));line-height:1.3}h1{font-size:1.75em}h2{font-size:1.5em}h3{font-size:1.25em}h4{font-size:1.1em}h5{font-size:1em}strong,b{font-weight:700}a,a:hover{color:var(--accent)}p{margin-bottom:1em}.prose p{margin-bottom:1.25em}textarea{width:100%;font-size:16px}input{font-size:16px}table{width:100%}img{max-width:100%;height:auto;border-radius:8px}code{padding:2px 5px;background-color:rgb(var(--gray-light));border-radius:2px}pre{padding:1.5em;border-radius:8px;max-height:50vh;overflow:auto}pre>code{all:unset}blockquote{border-left:4px solid var(--accent);padding:0 0 0 20px;margin:0;font-size:1.333em}hr{border:none;border-top:1px solid rgb(var(--gray-light))}@media(max-width:720px){body{font-size:18px}main{padding:1em}}.sr-only{border:0;padding:0;margin:0;position:absolute!important;height:1px;width:1px;overflow:hidden;clip:rect(1px 1px 1px 1px);clip:rect(1px,1px,1px,1px);clip-path:inset(50%);white-space:nowrap}footer[data-astro-cid-sz7xmlte]{padding:2em 1em;background:linear-gradient(var(--gray-gradient)) no-repeat;color:rgb(var(--gray));text-align:center}a[data-astro-cid-eimmu3lg]{display:inline-block;text-decoration:none}a[data-astro-cid-eimmu3lg].active{font-weight:bolder;text-decoration:underline}header[data-astro-cid-3ef6ksr2]{margin:0;padding:0 1em;background:#fff;box-shadow:0 2px 8px rgba(var(--black),5%)}h2[data-astro-cid-3ef6ksr2]{margin:0;font-size:1em}h2[data-astro-cid-3ef6ksr2] a[data-astro-cid-3ef6ksr2],h2[data-astro-cid-3ef6ksr2] a[data-astro-cid-3ef6ksr2].active{text-decoration:none}nav[data-astro-cid-3ef6ksr2]{display:flex;align-items:center;justify-content:space-between}nav[data-astro-cid-3ef6ksr2] a[data-astro-cid-3ef6ksr2]{padding:1em .5em;color:var(--black);border-bottom:4px solid transparent;text-decoration:none}nav[data-astro-cid-3ef6ksr2] a[data-astro-cid-3ef6ksr2].active{text-decoration:none;border-bottom-color:var(--accent)}
+main[data-astro-cid-bvzihdzo]{width:calc(100% - 2em);max-width:100%;margin:0}.hero-image[data-astro-cid-bvzihdzo]{width:100%}.hero-image[data-astro-cid-bvzihdzo] img[data-astro-cid-bvzihdzo]{display:block;margin:0 auto;border-radius:12px;box-shadow:var(--box-shadow)}.prose[data-astro-cid-bvzihdzo]{width:680px;max-width:calc(100% - 2em);margin:auto;padding:.5em 1em 3em;color:rgb(var(--gray-dark))}.prose[data-astro-cid-bvzihdzo] p{margin-bottom:1.25em;line-height:1.7}.prose[data-astro-cid-bvzihdzo] h2{margin-top:1.25em;margin-bottom:.5em}.prose[data-astro-cid-bvzihdzo] h3{margin-top:1em;margin-bottom:.4em}.title[data-astro-cid-bvzihdzo]{margin-bottom:.75em;padding:0 0 .75em;text-align:center;line-height:1.3}.title[data-astro-cid-bvzihdzo] h1[data-astro-cid-bvzihdzo]{margin:0 0 .4em;font-size:1.75em}.date[data-astro-cid-bvzihdzo]{margin-bottom:.75em;color:rgb(var(--gray));font-family:SF Mono,Monaco,Inconsolata,Fira Code,monospace;font-size:.875rem}.last-updated-on[data-astro-cid-bvzihdzo]{font-style:italic}.code-block-wrapper{position:relative}.copy-button{position:absolute;top:.5rem;right:.5rem;padding:.25rem .75rem;background:rgb(var(--gray-light));border:1px solid rgb(var(--gray));border-radius:4px;font-size:.75rem;cursor:pointer;transition:all .2s ease;color:rgb(var(--gray-dark));opacity:0;pointer-events:none}.code-block-wrapper:hover .copy-button{opacity:1;pointer-events:auto}.copy-button:hover{background:rgb(var(--accent));color:#fff;border-color:rgb(var(--accent))}.copy-button.copied{background:#10b981;color:#fff;border-color:#10b981}
+</style></head> <body data-astro-cid-bvzihdzo> <header data-astro-cid-3ef6ksr2> <nav data-astro-cid-3ef6ksr2> <h2 data-astro-cid-3ef6ksr2><a href="/" data-astro-cid-3ef6ksr2>Stephen Ni&#39;s Blog</a></h2> <div class="internal-links" data-astro-cid-3ef6ksr2> <a href="/" data-astro-cid-3ef6ksr2="true" data-astro-cid-eimmu3lg> Home </a> <a href="/blog" class="active" data-astro-cid-3ef6ksr2="true" data-astro-cid-eimmu3lg> Blog </a> <a href="/about" data-astro-cid-3ef6ksr2="true" data-astro-cid-eimmu3lg> About </a> </div> </nav> </header> <script type="module">document.addEventListener("DOMContentLoaded",()=>{const n=()=>{document.querySelectorAll("pre").forEach(t=>{if(t.parentElement?.classList.contains("code-block-wrapper"))return;const o=document.createElement("div");o.className="code-block-wrapper";const e=document.createElement("button");e.className="copy-button",e.textContent="复制",e.setAttribute("aria-label","复制代码"),e.addEventListener("click",async()=>{const r=t.querySelector("code").textContent;try{await navigator.clipboard.writeText(r),e.textContent="已复制!",e.classList.add("copied"),setTimeout(()=>{e.textContent="复制",e.classList.remove("copied")},2e3)}catch{e.textContent="失败",setTimeout(()=>{e.textContent="复制"},2e3)}}),t.parentNode.insertBefore(o,t),o.appendChild(t),o.appendChild(e)})};n(),new MutationObserver(()=>{n()}).observe(document.body,{childList:!0,subtree:!0})});</script> <script type="module">document.addEventListener("DOMContentLoaded",()=>{document.querySelectorAll(".prose img").forEach(o=>{o.style.cursor="pointer",o.addEventListener("click",()=>{const e=document.createElement("div");e.className="lightbox-overlay",e.style.cssText=`
+				position: fixed;
+				top: 0;
+				left: 0;
+				width: 100%;
+				height: 100%;
+				background: rgba(0, 0, 0, 0.9);
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				z-index: 9999;
+				cursor: pointer;
+				opacity: 0;
+				transition: opacity 0.3s ease;
+			`;const n=document.createElement("img");n.src=o.src,n.style.cssText=`
+				max-width: 90%;
+				max-height: 90%;
+				object-fit: contain;
+				border-radius: 8px;
+				box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+			`;const t=document.createElement("button");t.innerHTML="×",t.className="lightbox-close",t.style.cssText=`
+				position: absolute;
+				top: 20px;
+				right: 30px;
+				background: rgba(255, 255, 255, 0.2);
+				border: none;
+				color: white;
+				font-size: 40px;
+				cursor: pointer;
+				padding: 10px 20px;
+				border-radius: 5px;
+				transition: background 0.3s ease;
+			`,t.addEventListener("mouseenter",()=>{t.style.background="rgba(255, 255, 255, 0.3)"}),t.addEventListener("mouseleave",()=>{t.style.background="rgba(255, 255, 255, 0.2)"});const s=()=>{e.style.opacity="0",setTimeout(()=>{document.body.removeChild(e)},300)};e.addEventListener("click",s),t.addEventListener("click",s);const i=r=>{r.key==="Escape"&&(s(),document.removeEventListener("keydown",i))};document.addEventListener("keydown",i),e.appendChild(n),e.appendChild(t),document.body.appendChild(e),setTimeout(()=>{e.style.opacity="1"},10)})})});</script> <script type="module" src="/_astro/BlogPost.astro_astro_type_script_index_2_lang.CT6CDXPs.js"></script> <main data-astro-cid-bvzihdzo> <article data-astro-cid-bvzihdzo> <div class="hero-image" data-astro-cid-bvzihdzo>  </div> <div class="prose" data-astro-cid-bvzihdzo> <div class="title" data-astro-cid-bvzihdzo> <h1 data-astro-cid-bvzihdzo>Dubbo负载均衡之加权轮训</h1> <div class="date" data-astro-cid-bvzihdzo> 2018-10-15  </div> <hr data-astro-cid-bvzihdzo> </div>  <p>最近有个需求，需要对mq集群调用时做个权重分配，之前客户端对mq发送时都是普通轮询的策略，由于近期扩容，集群中部分服务器的性能不太一致，需要在mq发送时的策略做成带权重的轮询，让性能好的服务器处理更多的请求，也保护性能相对较差的服务器不被大流量压垮。实现此功能时参考了dubbo框架中的负载均衡轮询算法，在此做下笔记。</p>
+<!-- more -->
+<h2 id="问题">问题</h2>
+<p>在dubbo中，负载均衡的粒度可以细到方法级别。如图，在服务器A，服务器B和服务器C都提供hello()方法，消费者调用方法时需要选择其中一台服务器进行调用，当消费者对hello()进行大量调用时，如何将请求合理地分配到各服务器中，就是我们本文要探讨的问题。</p>
+<p><img alt="006tNbRwly1fw96wkok1yj30b50bmjrh" loading="lazy" decoding="async"  width="401" height="418" src="/_astro/006tNbRwly1fw96wkok1yj30b50bmjrh.BJ2C3RRY_FX6bX.webp" ></p>
+<h2 id="解决">解决</h2>
+<p>解决方法有很多，在dubbo中默认提供了四种负载均衡策略（随机、轮询、最少活跃调用数、一致性Hash），这里我们只讨论<code>轮询</code>策略。</p>
+<h3 id="无权重轮询">无权重轮询</h3>
+<p>无权重的轮询非常简单，如上面的例子，只需依次循环调用各服务器就行。调用顺序如下：</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="plaintext"><code><span class="line"><span>[A, B, C, A, B, C, ...]</span></span></code></pre>
+<h3 id="带权重轮询">带权重轮询</h3>
+<p>一般来说，无权重轮询也够用了，但是如果A、B、C者三台服务器的性能不一样（假设A>B>C），我们希望更多的请求落在A服务器上，这时候该如何做呢？</p>
+<p>我们假设权重比为A:B:C=6:3:1，有10个调用请求，那么比较直接想到的调用顺序如下：</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="plaintext"><code><span class="line"><span>[A, A, A, A, A, A, B, B, B, C]</span></span></code></pre>
+<p>请求按上面的顺序循环，的确是满足了按一定比例的分配，但是这样分配不太好，在一小段时间内，单台服务器连续处理多个请求会导致负载偏高，我们期望请求即要按权重分配，也要均匀地调用。</p>
+<p>我们用以下表格来表示，表格的高度表示权重，对应列分别表示服务器A、B、C。均匀的调用，即从左向右，从上到下遍历表格，得到调用顺序为如下：</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="plaintext"><code><span class="line"><span>[A, B, C, A, B, A, B, A, A, A]</span></span></code></pre>
+<p><img alt="006tNbRwly1fw95hs8w5rj305k08wa9w" loading="lazy" decoding="async"  width="200" height="320" src="/_astro/006tNbRwly1fw95hs8w5rj305k08wa9w.byq8iT58_2ij7QX.webp" ></p>
+<p>到目前dubbo最新的版本2.6.4为止，RoundRobinLoadBalance采用的算法如下：</p>
+<ul>
+<li>用sequences来记录每个method的调用次数</li>
+<li>计算出最大权重值maxWeight，即算出上图表格的高度</li>
+<li>计算出最小权重值minWeight，用来与maxWeight比较判断是否有权重差</li>
+<li>计算出权重和weightSum，用来与调用次数做计算取余</li>
+<li>mod为当前调用次数与权重和的余数，即表格上的数标</li>
+<li>得到数标值也就确定了目标服务器</li>
+<li>源码的双层for循环就是遍历表格，得到目标服务器</li>
+<li>每次遍历没有命中时，v.decrement()是为了跳过表格中灰色部分</li>
+<li>每次遍历没用命中时，mod减1可理解为从表格数标0位置开始往下走了一步</li>
+<li>当mod == 0且v.getValue() > 0时，表示走到指定的位置，即选中的服务器</li>
+</ul>
+<p>啰嗦了一点，其实算法时比较简单的，可以结合以下源码和表格理解。</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="java"><code><span class="line"><span style="color:#F97583">public</span><span style="color:#F97583"> class</span><span style="color:#B392F0"> RoundRobinLoadBalance</span><span style="color:#F97583"> extends</span><span style="color:#B392F0"> AbstractLoadBalance</span><span style="color:#E1E4E8"> {</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#F97583">    public</span><span style="color:#F97583"> static</span><span style="color:#F97583"> final</span><span style="color:#E1E4E8"> String NAME </span><span style="color:#F97583">=</span><span style="color:#9ECBFF"> "roundrobin"</span><span style="color:#E1E4E8">;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#F97583">    private</span><span style="color:#F97583"> final</span><span style="color:#E1E4E8"> ConcurrentMap&#x3C;</span><span style="color:#F97583">String</span><span style="color:#E1E4E8">, </span><span style="color:#F97583">AtomicPositiveInteger</span><span style="color:#E1E4E8">> sequences </span><span style="color:#F97583">=</span><span style="color:#F97583"> new</span><span style="color:#E1E4E8"> ConcurrentHashMap&#x3C;</span><span style="color:#F97583">String</span><span style="color:#E1E4E8">, </span><span style="color:#F97583">AtomicPositiveInteger</span><span style="color:#E1E4E8">>();</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#E1E4E8">    @</span><span style="color:#F97583">Override</span></span>
+<span class="line"><span style="color:#F97583">    protected</span><span style="color:#E1E4E8"> &#x3C;</span><span style="color:#F97583">T</span><span style="color:#E1E4E8">> Invoker&#x3C;</span><span style="color:#F97583">T</span><span style="color:#E1E4E8">> </span><span style="color:#B392F0">doSelect</span><span style="color:#E1E4E8">(List&#x3C;Invoker&#x3C;</span><span style="color:#F97583">T</span><span style="color:#E1E4E8">>> </span><span style="color:#FFAB70">invokers</span><span style="color:#E1E4E8">, URL </span><span style="color:#FFAB70">url</span><span style="color:#E1E4E8">, Invocation </span><span style="color:#FFAB70">invocation</span><span style="color:#E1E4E8">) {</span></span>
+<span class="line"><span style="color:#E1E4E8">        String key </span><span style="color:#F97583">=</span><span style="color:#E1E4E8"> invokers.</span><span style="color:#B392F0">get</span><span style="color:#E1E4E8">(</span><span style="color:#79B8FF">0</span><span style="color:#E1E4E8">).</span><span style="color:#B392F0">getUrl</span><span style="color:#E1E4E8">().</span><span style="color:#B392F0">getServiceKey</span><span style="color:#E1E4E8">() </span><span style="color:#F97583">+</span><span style="color:#9ECBFF"> "."</span><span style="color:#F97583"> +</span><span style="color:#E1E4E8"> invocation.</span><span style="color:#B392F0">getMethodName</span><span style="color:#E1E4E8">();</span></span>
+<span class="line"><span style="color:#F97583">        int</span><span style="color:#E1E4E8"> length </span><span style="color:#F97583">=</span><span style="color:#E1E4E8"> invokers.</span><span style="color:#B392F0">size</span><span style="color:#E1E4E8">(); </span><span style="color:#6A737D">// Number of invokers</span></span>
+<span class="line"><span style="color:#F97583">        int</span><span style="color:#E1E4E8"> maxWeight </span><span style="color:#F97583">=</span><span style="color:#79B8FF"> 0</span><span style="color:#E1E4E8">; </span><span style="color:#6A737D">// The maximum weight</span></span>
+<span class="line"><span style="color:#F97583">        int</span><span style="color:#E1E4E8"> minWeight </span><span style="color:#F97583">=</span><span style="color:#E1E4E8"> Integer.MAX_VALUE; </span><span style="color:#6A737D">// The minimum weight</span></span>
+<span class="line"><span style="color:#F97583">        final</span><span style="color:#E1E4E8"> LinkedHashMap&#x3C;Invoker&#x3C;</span><span style="color:#F97583">T</span><span style="color:#E1E4E8">>, </span><span style="color:#F97583">IntegerWrapper</span><span style="color:#E1E4E8">> invokerToWeightMap </span><span style="color:#F97583">=</span><span style="color:#F97583"> new</span><span style="color:#E1E4E8"> LinkedHashMap&#x3C;Invoker&#x3C;</span><span style="color:#F97583">T</span><span style="color:#E1E4E8">>, </span><span style="color:#F97583">IntegerWrapper</span><span style="color:#E1E4E8">>();</span></span>
+<span class="line"><span style="color:#F97583">        int</span><span style="color:#E1E4E8"> weightSum </span><span style="color:#F97583">=</span><span style="color:#79B8FF"> 0</span><span style="color:#E1E4E8">;</span></span>
+<span class="line"><span style="color:#F97583">        for</span><span style="color:#E1E4E8"> (</span><span style="color:#F97583">int</span><span style="color:#E1E4E8"> i </span><span style="color:#F97583">=</span><span style="color:#79B8FF"> 0</span><span style="color:#E1E4E8">; i </span><span style="color:#F97583">&#x3C;</span><span style="color:#E1E4E8"> length; i</span><span style="color:#F97583">++</span><span style="color:#E1E4E8">) {</span></span>
+<span class="line"><span style="color:#F97583">            int</span><span style="color:#E1E4E8"> weight </span><span style="color:#F97583">=</span><span style="color:#B392F0"> getWeight</span><span style="color:#E1E4E8">(invokers.</span><span style="color:#B392F0">get</span><span style="color:#E1E4E8">(i), invocation);</span></span>
+<span class="line"><span style="color:#E1E4E8">            maxWeight </span><span style="color:#F97583">=</span><span style="color:#E1E4E8"> Math.</span><span style="color:#B392F0">max</span><span style="color:#E1E4E8">(maxWeight, weight); </span><span style="color:#6A737D">// Choose the maximum weight</span></span>
+<span class="line"><span style="color:#E1E4E8">            minWeight </span><span style="color:#F97583">=</span><span style="color:#E1E4E8"> Math.</span><span style="color:#B392F0">min</span><span style="color:#E1E4E8">(minWeight, weight); </span><span style="color:#6A737D">// Choose the minimum weight</span></span>
+<span class="line"><span style="color:#F97583">            if</span><span style="color:#E1E4E8"> (weight </span><span style="color:#F97583">></span><span style="color:#79B8FF"> 0</span><span style="color:#E1E4E8">) {</span></span>
+<span class="line"><span style="color:#E1E4E8">                invokerToWeightMap.</span><span style="color:#B392F0">put</span><span style="color:#E1E4E8">(invokers.</span><span style="color:#B392F0">get</span><span style="color:#E1E4E8">(i), </span><span style="color:#F97583">new</span><span style="color:#B392F0"> IntegerWrapper</span><span style="color:#E1E4E8">(weight));</span></span>
+<span class="line"><span style="color:#E1E4E8">                weightSum </span><span style="color:#F97583">+=</span><span style="color:#E1E4E8"> weight;</span></span>
+<span class="line"><span style="color:#E1E4E8">            }</span></span>
+<span class="line"><span style="color:#E1E4E8">        }</span></span>
+<span class="line"><span style="color:#E1E4E8">        AtomicPositiveInteger sequence </span><span style="color:#F97583">=</span><span style="color:#E1E4E8"> sequences.</span><span style="color:#B392F0">get</span><span style="color:#E1E4E8">(key);</span></span>
+<span class="line"><span style="color:#F97583">        if</span><span style="color:#E1E4E8"> (sequence </span><span style="color:#F97583">==</span><span style="color:#79B8FF"> null</span><span style="color:#E1E4E8">) {</span></span>
+<span class="line"><span style="color:#E1E4E8">            sequences.</span><span style="color:#B392F0">putIfAbsent</span><span style="color:#E1E4E8">(key, </span><span style="color:#F97583">new</span><span style="color:#B392F0"> AtomicPositiveInteger</span><span style="color:#E1E4E8">());</span></span>
+<span class="line"><span style="color:#E1E4E8">            sequence </span><span style="color:#F97583">=</span><span style="color:#E1E4E8"> sequences.</span><span style="color:#B392F0">get</span><span style="color:#E1E4E8">(key);</span></span>
+<span class="line"><span style="color:#E1E4E8">        }</span></span>
+<span class="line"><span style="color:#F97583">        int</span><span style="color:#E1E4E8"> currentSequence </span><span style="color:#F97583">=</span><span style="color:#E1E4E8"> sequence.</span><span style="color:#B392F0">getAndIncrement</span><span style="color:#E1E4E8">();</span></span>
+<span class="line"><span style="color:#F97583">        if</span><span style="color:#E1E4E8"> (maxWeight </span><span style="color:#F97583">></span><span style="color:#79B8FF"> 0</span><span style="color:#F97583"> &#x26;&#x26;</span><span style="color:#E1E4E8"> minWeight </span><span style="color:#F97583">&#x3C;</span><span style="color:#E1E4E8"> maxWeight) {</span></span>
+<span class="line"><span style="color:#F97583">            int</span><span style="color:#E1E4E8"> mod </span><span style="color:#F97583">=</span><span style="color:#E1E4E8"> currentSequence </span><span style="color:#F97583">%</span><span style="color:#E1E4E8"> weightSum;</span></span>
+<span class="line"><span style="color:#F97583">            for</span><span style="color:#E1E4E8"> (</span><span style="color:#F97583">int</span><span style="color:#E1E4E8"> i </span><span style="color:#F97583">=</span><span style="color:#79B8FF"> 0</span><span style="color:#E1E4E8">; i </span><span style="color:#F97583">&#x3C;</span><span style="color:#E1E4E8"> maxWeight; i</span><span style="color:#F97583">++</span><span style="color:#E1E4E8">) {</span></span>
+<span class="line"><span style="color:#F97583">                for</span><span style="color:#E1E4E8"> (Map.Entry&#x3C;Invoker&#x3C;</span><span style="color:#F97583">T</span><span style="color:#E1E4E8">>, </span><span style="color:#F97583">IntegerWrapper</span><span style="color:#E1E4E8">> each </span><span style="color:#F97583">:</span><span style="color:#E1E4E8"> invokerToWeightMap.</span><span style="color:#B392F0">entrySet</span><span style="color:#E1E4E8">()) {</span></span>
+<span class="line"><span style="color:#F97583">                    final</span><span style="color:#E1E4E8"> Invoker&#x3C;</span><span style="color:#F97583">T</span><span style="color:#E1E4E8">> k </span><span style="color:#F97583">=</span><span style="color:#E1E4E8"> each.</span><span style="color:#B392F0">getKey</span><span style="color:#E1E4E8">();</span></span>
+<span class="line"><span style="color:#F97583">                    final</span><span style="color:#E1E4E8"> IntegerWrapper v </span><span style="color:#F97583">=</span><span style="color:#E1E4E8"> each.</span><span style="color:#B392F0">getValue</span><span style="color:#E1E4E8">();</span></span>
+<span class="line"><span style="color:#F97583">                    if</span><span style="color:#E1E4E8"> (mod </span><span style="color:#F97583">==</span><span style="color:#79B8FF"> 0</span><span style="color:#F97583"> &#x26;&#x26;</span><span style="color:#E1E4E8"> v.</span><span style="color:#B392F0">getValue</span><span style="color:#E1E4E8">() </span><span style="color:#F97583">></span><span style="color:#79B8FF"> 0</span><span style="color:#E1E4E8">) {</span></span>
+<span class="line"><span style="color:#F97583">                        return</span><span style="color:#E1E4E8"> k;</span></span>
+<span class="line"><span style="color:#E1E4E8">                    }</span></span>
+<span class="line"><span style="color:#F97583">                    if</span><span style="color:#E1E4E8"> (v.</span><span style="color:#B392F0">getValue</span><span style="color:#E1E4E8">() </span><span style="color:#F97583">></span><span style="color:#79B8FF"> 0</span><span style="color:#E1E4E8">) {</span></span>
+<span class="line"><span style="color:#E1E4E8">                        v.</span><span style="color:#B392F0">decrement</span><span style="color:#E1E4E8">();</span></span>
+<span class="line"><span style="color:#E1E4E8">                        mod</span><span style="color:#F97583">--</span><span style="color:#E1E4E8">;</span></span>
+<span class="line"><span style="color:#E1E4E8">                    }</span></span>
+<span class="line"><span style="color:#E1E4E8">                }</span></span>
+<span class="line"><span style="color:#E1E4E8">            }</span></span>
+<span class="line"><span style="color:#E1E4E8">        }</span></span>
+<span class="line"><span style="color:#6A737D">        // Round robin</span></span>
+<span class="line"><span style="color:#F97583">        return</span><span style="color:#E1E4E8"> invokers.</span><span style="color:#B392F0">get</span><span style="color:#E1E4E8">(currentSequence </span><span style="color:#F97583">%</span><span style="color:#E1E4E8"> length);</span></span>
+<span class="line"><span style="color:#E1E4E8">    }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#F97583">    private</span><span style="color:#F97583"> static</span><span style="color:#F97583"> final</span><span style="color:#F97583"> class</span><span style="color:#B392F0"> IntegerWrapper</span><span style="color:#E1E4E8"> {</span></span>
+<span class="line"><span style="color:#F97583">        private</span><span style="color:#F97583"> int</span><span style="color:#E1E4E8"> value;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#F97583">        public</span><span style="color:#B392F0"> IntegerWrapper</span><span style="color:#E1E4E8">(</span><span style="color:#F97583">int</span><span style="color:#FFAB70"> value</span><span style="color:#E1E4E8">) {</span></span>
+<span class="line"><span style="color:#79B8FF">            this</span><span style="color:#E1E4E8">.value </span><span style="color:#F97583">=</span><span style="color:#E1E4E8"> value;</span></span>
+<span class="line"><span style="color:#E1E4E8">        }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#F97583">        public</span><span style="color:#F97583"> int</span><span style="color:#B392F0"> getValue</span><span style="color:#E1E4E8">() {</span></span>
+<span class="line"><span style="color:#F97583">            return</span><span style="color:#E1E4E8"> value;</span></span>
+<span class="line"><span style="color:#E1E4E8">        }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#F97583">        public</span><span style="color:#F97583"> void</span><span style="color:#B392F0"> setValue</span><span style="color:#E1E4E8">(</span><span style="color:#F97583">int</span><span style="color:#FFAB70"> value</span><span style="color:#E1E4E8">) {</span></span>
+<span class="line"><span style="color:#79B8FF">            this</span><span style="color:#E1E4E8">.value </span><span style="color:#F97583">=</span><span style="color:#E1E4E8"> value;</span></span>
+<span class="line"><span style="color:#E1E4E8">        }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#F97583">        public</span><span style="color:#F97583"> void</span><span style="color:#B392F0"> decrement</span><span style="color:#E1E4E8">() {</span></span>
+<span class="line"><span style="color:#79B8FF">            this</span><span style="color:#E1E4E8">.value</span><span style="color:#F97583">--</span><span style="color:#E1E4E8">;</span></span>
+<span class="line"><span style="color:#E1E4E8">        }</span></span>
+<span class="line"><span style="color:#E1E4E8">    }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#E1E4E8">}</span></span></code></pre>
+<h3 id="带权重轮询优化版">带权重轮询（优化版）</h3>
+<p>本以为上面的轮询算法就可以直接拿来借鉴，但是发现dubbo最近有个提交是优化该算法的，只是还没有并入迭代的版本，处于未正式发布状态。我们来看看相关的issue。</p>
+<p>问题发起的issue：<a href="https://github.com/apache/incubator-dubbo/issues/2578">https://github.com/apache/incubator-dubbo/issues/2578</a></p>
+<p>接受PR的issue：<a href="https://github.com/apache/incubator-dubbo/pull/2586">https://github.com/apache/incubator-dubbo/pull/2586</a></p>
+<p>旧算法的时间复杂度是O(n*w)，新算法的时间复杂度为O(n)。n为invokers数，w为weight。</p>
+<p>在极端情况下，个别weight特别大时，会导致旧算法的性能较差。</p>
+<p>还是用表格来表示，在新的算法中，10次请求得到的顺序，如数标所示，即：</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="plaintext"><code><span class="line"><span>[A, B, A, B, A, A, A, A, B, C]</span></span></code></pre>
+<p>由于轮训该顺序会不断的重复，其实与前面算法的结果是一样的，只是把前三位挪到了后面而已。</p>
+<p><img alt="006tNbRwly1fw96wop4i4j30ac0atmx6" loading="lazy" decoding="async"  width="372" height="389" src="/_astro/006tNbRwly1fw96wop4i4j30ac0atmx6.DEarfejT_Z13SbXB.webp" ></p>
+<p>新版RoundRobinLoadBalance的算法基于原来的做了改良，特点如下：</p>
+<ul>
+<li>新增indexSeqs，与sequences集合使用。sequences意义与原来不同。</li>
+<li>算法中的index由indexSeqs与invokers的数量取余得到，可理解为表格的横坐标</li>
+<li>算法中的currentWeight由sequeces与maxWeight取余得到，可理解为表格的纵坐标</li>
+<li>用while单层遍历，每次判断当前元素的权重是否大于currentWeight，true即选中</li>
+<li>图中的数标即为遍历选中的顺序</li>
+</ul>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="java"><code><span class="line"><span style="color:#F97583">public</span><span style="color:#F97583"> class</span><span style="color:#B392F0"> RoundRobinLoadBalance</span><span style="color:#F97583"> extends</span><span style="color:#B392F0"> AbstractLoadBalance</span><span style="color:#E1E4E8"> {</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#F97583">    public</span><span style="color:#F97583"> static</span><span style="color:#F97583"> final</span><span style="color:#E1E4E8"> String NAME </span><span style="color:#F97583">=</span><span style="color:#9ECBFF"> "roundrobin"</span><span style="color:#E1E4E8">;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#F97583">    private</span><span style="color:#F97583"> final</span><span style="color:#E1E4E8"> ConcurrentMap&#x3C;</span><span style="color:#F97583">String</span><span style="color:#E1E4E8">, </span><span style="color:#F97583">AtomicPositiveInteger</span><span style="color:#E1E4E8">> sequences </span><span style="color:#F97583">=</span><span style="color:#F97583"> new</span><span style="color:#E1E4E8"> ConcurrentHashMap&#x3C;</span><span style="color:#F97583">String</span><span style="color:#E1E4E8">, </span><span style="color:#F97583">AtomicPositiveInteger</span><span style="color:#E1E4E8">>();</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#F97583">    private</span><span style="color:#F97583"> final</span><span style="color:#E1E4E8"> ConcurrentMap&#x3C;</span><span style="color:#F97583">String</span><span style="color:#E1E4E8">, </span><span style="color:#F97583">AtomicPositiveInteger</span><span style="color:#E1E4E8">> indexSeqs </span><span style="color:#F97583">=</span><span style="color:#F97583"> new</span><span style="color:#E1E4E8"> ConcurrentHashMap&#x3C;</span><span style="color:#F97583">String</span><span style="color:#E1E4E8">, </span><span style="color:#F97583">AtomicPositiveInteger</span><span style="color:#E1E4E8">>();</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#E1E4E8">    @</span><span style="color:#F97583">Override</span></span>
+<span class="line"><span style="color:#F97583">    protected</span><span style="color:#E1E4E8"> &#x3C;</span><span style="color:#F97583">T</span><span style="color:#E1E4E8">> Invoker&#x3C;</span><span style="color:#F97583">T</span><span style="color:#E1E4E8">> </span><span style="color:#B392F0">doSelect</span><span style="color:#E1E4E8">(List&#x3C;Invoker&#x3C;</span><span style="color:#F97583">T</span><span style="color:#E1E4E8">>> </span><span style="color:#FFAB70">invokers</span><span style="color:#E1E4E8">, URL </span><span style="color:#FFAB70">url</span><span style="color:#E1E4E8">, Invocation </span><span style="color:#FFAB70">invocation</span><span style="color:#E1E4E8">) {</span></span>
+<span class="line"><span style="color:#E1E4E8">        String key </span><span style="color:#F97583">=</span><span style="color:#E1E4E8"> invokers.</span><span style="color:#B392F0">get</span><span style="color:#E1E4E8">(</span><span style="color:#79B8FF">0</span><span style="color:#E1E4E8">).</span><span style="color:#B392F0">getUrl</span><span style="color:#E1E4E8">().</span><span style="color:#B392F0">getServiceKey</span><span style="color:#E1E4E8">() </span><span style="color:#F97583">+</span><span style="color:#9ECBFF"> "."</span><span style="color:#F97583"> +</span><span style="color:#E1E4E8"> invocation.</span><span style="color:#B392F0">getMethodName</span><span style="color:#E1E4E8">();</span></span>
+<span class="line"><span style="color:#F97583">        int</span><span style="color:#E1E4E8"> length </span><span style="color:#F97583">=</span><span style="color:#E1E4E8"> invokers.</span><span style="color:#B392F0">size</span><span style="color:#E1E4E8">(); </span><span style="color:#6A737D">// Number of invokers</span></span>
+<span class="line"><span style="color:#F97583">        int</span><span style="color:#E1E4E8"> maxWeight </span><span style="color:#F97583">=</span><span style="color:#79B8FF"> 0</span><span style="color:#E1E4E8">; </span><span style="color:#6A737D">// The maximum weight</span></span>
+<span class="line"><span style="color:#F97583">        int</span><span style="color:#E1E4E8"> minWeight </span><span style="color:#F97583">=</span><span style="color:#E1E4E8"> Integer.MAX_VALUE; </span><span style="color:#6A737D">// The minimum weight</span></span>
+<span class="line"><span style="color:#F97583">        final</span><span style="color:#E1E4E8"> List&#x3C;Invoker&#x3C;</span><span style="color:#F97583">T</span><span style="color:#E1E4E8">>> nonZeroWeightedInvokers </span><span style="color:#F97583">=</span><span style="color:#F97583"> new</span><span style="color:#E1E4E8"> ArrayList&#x3C;>();</span></span>
+<span class="line"><span style="color:#F97583">        for</span><span style="color:#E1E4E8"> (</span><span style="color:#F97583">int</span><span style="color:#E1E4E8"> i </span><span style="color:#F97583">=</span><span style="color:#79B8FF"> 0</span><span style="color:#E1E4E8">; i </span><span style="color:#F97583">&#x3C;</span><span style="color:#E1E4E8"> length; i</span><span style="color:#F97583">++</span><span style="color:#E1E4E8">) {</span></span>
+<span class="line"><span style="color:#F97583">            int</span><span style="color:#E1E4E8"> weight </span><span style="color:#F97583">=</span><span style="color:#B392F0"> getWeight</span><span style="color:#E1E4E8">(invokers.</span><span style="color:#B392F0">get</span><span style="color:#E1E4E8">(i), invocation);</span></span>
+<span class="line"><span style="color:#E1E4E8">            maxWeight </span><span style="color:#F97583">=</span><span style="color:#E1E4E8"> Math.</span><span style="color:#B392F0">max</span><span style="color:#E1E4E8">(maxWeight, weight); </span><span style="color:#6A737D">// Choose the maximum weight</span></span>
+<span class="line"><span style="color:#E1E4E8">            minWeight </span><span style="color:#F97583">=</span><span style="color:#E1E4E8"> Math.</span><span style="color:#B392F0">min</span><span style="color:#E1E4E8">(minWeight, weight); </span><span style="color:#6A737D">// Choose the minimum weight</span></span>
+<span class="line"><span style="color:#F97583">            if</span><span style="color:#E1E4E8"> (weight </span><span style="color:#F97583">></span><span style="color:#79B8FF"> 0</span><span style="color:#E1E4E8">) {</span></span>
+<span class="line"><span style="color:#E1E4E8">                nonZeroWeightedInvokers.</span><span style="color:#B392F0">add</span><span style="color:#E1E4E8">(invokers.</span><span style="color:#B392F0">get</span><span style="color:#E1E4E8">(i));</span></span>
+<span class="line"><span style="color:#E1E4E8">            }</span></span>
+<span class="line"><span style="color:#E1E4E8">        }</span></span>
+<span class="line"><span style="color:#E1E4E8">        AtomicPositiveInteger sequence </span><span style="color:#F97583">=</span><span style="color:#E1E4E8"> sequences.</span><span style="color:#B392F0">get</span><span style="color:#E1E4E8">(key);</span></span>
+<span class="line"><span style="color:#F97583">        if</span><span style="color:#E1E4E8"> (sequence </span><span style="color:#F97583">==</span><span style="color:#79B8FF"> null</span><span style="color:#E1E4E8">) {</span></span>
+<span class="line"><span style="color:#E1E4E8">            sequences.</span><span style="color:#B392F0">putIfAbsent</span><span style="color:#E1E4E8">(key, </span><span style="color:#F97583">new</span><span style="color:#B392F0"> AtomicPositiveInteger</span><span style="color:#E1E4E8">());</span></span>
+<span class="line"><span style="color:#E1E4E8">            sequence </span><span style="color:#F97583">=</span><span style="color:#E1E4E8"> sequences.</span><span style="color:#B392F0">get</span><span style="color:#E1E4E8">(key);</span></span>
+<span class="line"><span style="color:#E1E4E8">        }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#F97583">        if</span><span style="color:#E1E4E8"> (maxWeight </span><span style="color:#F97583">></span><span style="color:#79B8FF"> 0</span><span style="color:#F97583"> &#x26;&#x26;</span><span style="color:#E1E4E8"> minWeight </span><span style="color:#F97583">&#x3C;</span><span style="color:#E1E4E8"> maxWeight) {</span></span>
+<span class="line"><span style="color:#E1E4E8">            AtomicPositiveInteger indexSeq </span><span style="color:#F97583">=</span><span style="color:#E1E4E8"> indexSeqs.</span><span style="color:#B392F0">get</span><span style="color:#E1E4E8">(key);</span></span>
+<span class="line"><span style="color:#F97583">            if</span><span style="color:#E1E4E8"> (indexSeq </span><span style="color:#F97583">==</span><span style="color:#79B8FF"> null</span><span style="color:#E1E4E8">) {</span></span>
+<span class="line"><span style="color:#E1E4E8">                indexSeqs.</span><span style="color:#B392F0">putIfAbsent</span><span style="color:#E1E4E8">(key, </span><span style="color:#F97583">new</span><span style="color:#B392F0"> AtomicPositiveInteger</span><span style="color:#E1E4E8">(</span><span style="color:#F97583">-</span><span style="color:#79B8FF">1</span><span style="color:#E1E4E8">));</span></span>
+<span class="line"><span style="color:#E1E4E8">                indexSeq </span><span style="color:#F97583">=</span><span style="color:#E1E4E8"> indexSeqs.</span><span style="color:#B392F0">get</span><span style="color:#E1E4E8">(key);</span></span>
+<span class="line"><span style="color:#E1E4E8">            }</span></span>
+<span class="line"><span style="color:#E1E4E8">            length </span><span style="color:#F97583">=</span><span style="color:#E1E4E8"> nonZeroWeightedInvokers.</span><span style="color:#B392F0">size</span><span style="color:#E1E4E8">();</span></span>
+<span class="line"><span style="color:#F97583">            while</span><span style="color:#E1E4E8"> (</span><span style="color:#79B8FF">true</span><span style="color:#E1E4E8">) {</span></span>
+<span class="line"><span style="color:#F97583">                int</span><span style="color:#E1E4E8"> index </span><span style="color:#F97583">=</span><span style="color:#E1E4E8"> indexSeq.</span><span style="color:#B392F0">incrementAndGet</span><span style="color:#E1E4E8">() </span><span style="color:#F97583">%</span><span style="color:#E1E4E8"> length;</span></span>
+<span class="line"><span style="color:#F97583">                int</span><span style="color:#E1E4E8"> currentWeight;</span></span>
+<span class="line"><span style="color:#F97583">                if</span><span style="color:#E1E4E8"> (index </span><span style="color:#F97583">==</span><span style="color:#79B8FF"> 0</span><span style="color:#E1E4E8">) {</span></span>
+<span class="line"><span style="color:#E1E4E8">                    currentWeight </span><span style="color:#F97583">=</span><span style="color:#E1E4E8"> sequence.</span><span style="color:#B392F0">incrementAndGet</span><span style="color:#E1E4E8">() </span><span style="color:#F97583">%</span><span style="color:#E1E4E8"> maxWeight;</span></span>
+<span class="line"><span style="color:#E1E4E8">                } </span><span style="color:#F97583">else</span><span style="color:#E1E4E8"> {</span></span>
+<span class="line"><span style="color:#E1E4E8">                    currentWeight </span><span style="color:#F97583">=</span><span style="color:#E1E4E8"> sequence.</span><span style="color:#B392F0">get</span><span style="color:#E1E4E8">() </span><span style="color:#F97583">%</span><span style="color:#E1E4E8"> maxWeight;</span></span>
+<span class="line"><span style="color:#E1E4E8">                }</span></span>
+<span class="line"><span style="color:#F97583">                if</span><span style="color:#E1E4E8"> (</span><span style="color:#B392F0">getWeight</span><span style="color:#E1E4E8">(nonZeroWeightedInvokers.</span><span style="color:#B392F0">get</span><span style="color:#E1E4E8">(index), invocation) </span><span style="color:#F97583">></span><span style="color:#E1E4E8"> currentWeight) {</span></span>
+<span class="line"><span style="color:#F97583">                    return</span><span style="color:#E1E4E8"> nonZeroWeightedInvokers.</span><span style="color:#B392F0">get</span><span style="color:#E1E4E8">(index);</span></span>
+<span class="line"><span style="color:#E1E4E8">                }</span></span>
+<span class="line"><span style="color:#E1E4E8">            }</span></span>
+<span class="line"><span style="color:#E1E4E8">        }</span></span>
+<span class="line"><span style="color:#6A737D">        // Round robin</span></span>
+<span class="line"><span style="color:#F97583">        return</span><span style="color:#E1E4E8"> invokers.</span><span style="color:#B392F0">get</span><span style="color:#E1E4E8">(sequence.</span><span style="color:#B392F0">getAndIncrement</span><span style="color:#E1E4E8">() </span><span style="color:#F97583">%</span><span style="color:#E1E4E8"> length);</span></span>
+<span class="line"><span style="color:#E1E4E8">    }</span></span>
+<span class="line"><span style="color:#E1E4E8">}</span></span></code></pre>
+<h3 id="性能测试">性能测试</h3>
+<p>这里简单提供下我本地测试的数据，我模拟了100w次请求，造了10个invoker，权重分别为：</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="plaintext"><code><span class="line"><span>[100,100,200,200,300,300,400,400,500,50000]</span></span></code></pre>
+<p>故意让最后一个权重设置大一点，得到结果如下：</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="plaintext"><code><span class="line"><span>优化前耗时：548445 mills</span></span>
+<span class="line"><span>请求分布：[2000,2000,4000,4000,6000,6000,7925,7925,9825,950325]</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>优化后耗时：1665 millis</span></span>
+<span class="line"><span>请求分布：[1999,1999,3999,3999,5999,5999,7927,7927,9826,950326]</span></span></code></pre>
+<p>在以上条件，耗时竟相差330倍左右，看来这个优化后续很快就会纳入正式版中。</p>
+<p>由于篇幅原因，就不贴测试代码与机器配置了，这里只是提供一些测试报告辅助说明。</p>
+<h2 id="总结">总结</h2>
+<p>原本只是为了了解dubbo负载均衡轮询带权重的实现，却意外收获了该算法的优化。我们经常听说<code>时间换空间，空间换时间</code>，这里便是典型的优化案例，利用少量的空间换取时间，将时间复杂度从O(n*w)降到O(n)。</p>
+<p>在以后的工作中，要多考虑性能上的优化，一般多重循环都有优化空间。</p>  </div> </article> </main> <footer data-astro-cid-sz7xmlte>
+&copy; 2026 Stephen Ni. All rights reserved.
+</footer> </body></html>

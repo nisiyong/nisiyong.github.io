@@ -1,0 +1,113 @@
+<!DOCTYPE html><html lang="en" data-astro-cid-bvzihdzo> <head><!-- Global Metadata --><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" type="image/svg+xml" href="/favicon.svg"><link rel="icon" href="/favicon.ico"><link rel="sitemap" href="/sitemap-index.xml"><link rel="alternate" type="application/rss+xml" title="Stephen Ni's Blog" href="https://nisiyong.com/rss.xml"><meta name="generator" content="Astro v6.1.1"><!-- Font preloads --><link rel="preload" href="/fonts/atkinson-regular.woff" as="font" type="font/woff" crossorigin><link rel="preload" href="/fonts/atkinson-bold.woff" as="font" type="font/woff" crossorigin><!-- Canonical URL --><link rel="canonical" href="https://nisiyong.com/blog/frontend-slides-skill-review/"><!-- Primary Meta Tags --><title>用 AI 做幻灯片：frontend-slides Skill 使用体验</title><meta name="title" content="用 AI 做幻灯片：frontend-slides Skill 使用体验"><meta name="description" content="一次低频但刚需的幻灯片制作，让我发现了一个非常实用的开源 Skill。"><!-- Open Graph / Facebook --><meta property="og:type" content="website"><meta property="og:url" content="https://nisiyong.com/blog/frontend-slides-skill-review/"><meta property="og:title" content="用 AI 做幻灯片：frontend-slides Skill 使用体验"><meta property="og:description" content="一次低频但刚需的幻灯片制作，让我发现了一个非常实用的开源 Skill。"><meta property="og:image" content="https://nisiyong.com/_astro/blog-placeholder-1.Bx0Zcyzv.jpg"><!-- Twitter --><meta property="twitter:card" content="summary_large_image"><meta property="twitter:url" content="https://nisiyong.com/blog/frontend-slides-skill-review/"><meta property="twitter:title" content="用 AI 做幻灯片：frontend-slides Skill 使用体验"><meta property="twitter:description" content="一次低频但刚需的幻灯片制作，让我发现了一个非常实用的开源 Skill。"><meta property="twitter:image" content="https://nisiyong.com/_astro/blog-placeholder-1.Bx0Zcyzv.jpg"><style>:root{--accent: #3b82f6;--accent-dark: #2563eb;--black: 15, 18, 25;--gray: 96, 115, 159;--gray-light: 229, 233, 240;--gray-dark: 34, 41, 57;--gray-gradient: rgba(var(--gray-light), 50%), #fff;--box-shadow: 0 2px 6px rgba(var(--gray), 25%), 0 8px 24px rgba(var(--gray), 33%), 0 16px 32px rgba(var(--gray), 33%)}@font-face{font-family:Atkinson;src:url(/fonts/atkinson-regular.woff) format("woff");font-weight:400;font-style:normal;font-display:swap}@font-face{font-family:Atkinson;src:url(/fonts/atkinson-bold.woff) format("woff");font-weight:700;font-style:normal;font-display:swap}body{font-family:Atkinson,sans-serif;margin:0;padding:0;text-align:left;background:linear-gradient(var(--gray-gradient)) no-repeat;background-size:100% 600px;word-wrap:break-word;overflow-wrap:break-word;color:rgb(var(--gray-dark));font-size:17px;line-height:1.7}main{width:720px;max-width:calc(100% - 2em);margin:auto;padding:3em 1em}h1,h2,h3,h4,h5,h6{margin:0 0 .75rem;color:rgb(var(--black));line-height:1.3}h1{font-size:1.75em}h2{font-size:1.5em}h3{font-size:1.25em}h4{font-size:1.1em}h5{font-size:1em}strong,b{font-weight:700}a,a:hover{color:var(--accent)}p{margin-bottom:1em}.prose p{margin-bottom:1.25em}textarea{width:100%;font-size:16px}input{font-size:16px}table{width:100%}img{max-width:100%;height:auto;border-radius:8px}code{padding:2px 5px;background-color:rgb(var(--gray-light));border-radius:2px}pre{padding:1.5em;border-radius:8px;max-height:50vh;overflow:auto}pre>code{all:unset}blockquote{border-left:4px solid var(--accent);padding:0 0 0 20px;margin:0;font-size:1.333em}hr{border:none;border-top:1px solid rgb(var(--gray-light))}@media(max-width:720px){body{font-size:18px}main{padding:1em}}.sr-only{border:0;padding:0;margin:0;position:absolute!important;height:1px;width:1px;overflow:hidden;clip:rect(1px 1px 1px 1px);clip:rect(1px,1px,1px,1px);clip-path:inset(50%);white-space:nowrap}footer[data-astro-cid-sz7xmlte]{padding:2em 1em;background:linear-gradient(var(--gray-gradient)) no-repeat;color:rgb(var(--gray));text-align:center}a[data-astro-cid-eimmu3lg]{display:inline-block;text-decoration:none}a[data-astro-cid-eimmu3lg].active{font-weight:bolder;text-decoration:underline}header[data-astro-cid-3ef6ksr2]{margin:0;padding:0 1em;background:#fff;box-shadow:0 2px 8px rgba(var(--black),5%)}h2[data-astro-cid-3ef6ksr2]{margin:0;font-size:1em}h2[data-astro-cid-3ef6ksr2] a[data-astro-cid-3ef6ksr2],h2[data-astro-cid-3ef6ksr2] a[data-astro-cid-3ef6ksr2].active{text-decoration:none}nav[data-astro-cid-3ef6ksr2]{display:flex;align-items:center;justify-content:space-between}nav[data-astro-cid-3ef6ksr2] a[data-astro-cid-3ef6ksr2]{padding:1em .5em;color:var(--black);border-bottom:4px solid transparent;text-decoration:none}nav[data-astro-cid-3ef6ksr2] a[data-astro-cid-3ef6ksr2].active{text-decoration:none;border-bottom-color:var(--accent)}
+main[data-astro-cid-bvzihdzo]{width:calc(100% - 2em);max-width:100%;margin:0}.hero-image[data-astro-cid-bvzihdzo]{width:100%}.hero-image[data-astro-cid-bvzihdzo] img[data-astro-cid-bvzihdzo]{display:block;margin:0 auto;border-radius:12px;box-shadow:var(--box-shadow)}.prose[data-astro-cid-bvzihdzo]{width:680px;max-width:calc(100% - 2em);margin:auto;padding:.5em 1em 3em;color:rgb(var(--gray-dark))}.prose[data-astro-cid-bvzihdzo] p{margin-bottom:1.25em;line-height:1.7}.prose[data-astro-cid-bvzihdzo] h2{margin-top:1.25em;margin-bottom:.5em}.prose[data-astro-cid-bvzihdzo] h3{margin-top:1em;margin-bottom:.4em}.title[data-astro-cid-bvzihdzo]{margin-bottom:.75em;padding:0 0 .75em;text-align:center;line-height:1.3}.title[data-astro-cid-bvzihdzo] h1[data-astro-cid-bvzihdzo]{margin:0 0 .4em;font-size:1.75em}.date[data-astro-cid-bvzihdzo]{margin-bottom:.75em;color:rgb(var(--gray));font-family:SF Mono,Monaco,Inconsolata,Fira Code,monospace;font-size:.875rem}.last-updated-on[data-astro-cid-bvzihdzo]{font-style:italic}.code-block-wrapper{position:relative}.copy-button{position:absolute;top:.5rem;right:.5rem;padding:.25rem .75rem;background:rgb(var(--gray-light));border:1px solid rgb(var(--gray));border-radius:4px;font-size:.75rem;cursor:pointer;transition:all .2s ease;color:rgb(var(--gray-dark));opacity:0;pointer-events:none}.code-block-wrapper:hover .copy-button{opacity:1;pointer-events:auto}.copy-button:hover{background:rgb(var(--accent));color:#fff;border-color:rgb(var(--accent))}.copy-button.copied{background:#10b981;color:#fff;border-color:#10b981}
+</style></head> <body data-astro-cid-bvzihdzo> <header data-astro-cid-3ef6ksr2> <nav data-astro-cid-3ef6ksr2> <h2 data-astro-cid-3ef6ksr2><a href="/" data-astro-cid-3ef6ksr2>Stephen Ni&#39;s Blog</a></h2> <div class="internal-links" data-astro-cid-3ef6ksr2> <a href="/" data-astro-cid-3ef6ksr2="true" data-astro-cid-eimmu3lg> Home </a> <a href="/blog" class="active" data-astro-cid-3ef6ksr2="true" data-astro-cid-eimmu3lg> Blog </a> <a href="/about" data-astro-cid-3ef6ksr2="true" data-astro-cid-eimmu3lg> About </a> </div> </nav> </header> <script type="module">document.addEventListener("DOMContentLoaded",()=>{const n=()=>{document.querySelectorAll("pre").forEach(t=>{if(t.parentElement?.classList.contains("code-block-wrapper"))return;const o=document.createElement("div");o.className="code-block-wrapper";const e=document.createElement("button");e.className="copy-button",e.textContent="复制",e.setAttribute("aria-label","复制代码"),e.addEventListener("click",async()=>{const r=t.querySelector("code").textContent;try{await navigator.clipboard.writeText(r),e.textContent="已复制!",e.classList.add("copied"),setTimeout(()=>{e.textContent="复制",e.classList.remove("copied")},2e3)}catch{e.textContent="失败",setTimeout(()=>{e.textContent="复制"},2e3)}}),t.parentNode.insertBefore(o,t),o.appendChild(t),o.appendChild(e)})};n(),new MutationObserver(()=>{n()}).observe(document.body,{childList:!0,subtree:!0})});</script> <script type="module">document.addEventListener("DOMContentLoaded",()=>{document.querySelectorAll(".prose img").forEach(o=>{o.style.cursor="pointer",o.addEventListener("click",()=>{const e=document.createElement("div");e.className="lightbox-overlay",e.style.cssText=`
+				position: fixed;
+				top: 0;
+				left: 0;
+				width: 100%;
+				height: 100%;
+				background: rgba(0, 0, 0, 0.9);
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				z-index: 9999;
+				cursor: pointer;
+				opacity: 0;
+				transition: opacity 0.3s ease;
+			`;const n=document.createElement("img");n.src=o.src,n.style.cssText=`
+				max-width: 90%;
+				max-height: 90%;
+				object-fit: contain;
+				border-radius: 8px;
+				box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+			`;const t=document.createElement("button");t.innerHTML="×",t.className="lightbox-close",t.style.cssText=`
+				position: absolute;
+				top: 20px;
+				right: 30px;
+				background: rgba(255, 255, 255, 0.2);
+				border: none;
+				color: white;
+				font-size: 40px;
+				cursor: pointer;
+				padding: 10px 20px;
+				border-radius: 5px;
+				transition: background 0.3s ease;
+			`,t.addEventListener("mouseenter",()=>{t.style.background="rgba(255, 255, 255, 0.3)"}),t.addEventListener("mouseleave",()=>{t.style.background="rgba(255, 255, 255, 0.2)"});const s=()=>{e.style.opacity="0",setTimeout(()=>{document.body.removeChild(e)},300)};e.addEventListener("click",s),t.addEventListener("click",s);const i=r=>{r.key==="Escape"&&(s(),document.removeEventListener("keydown",i))};document.addEventListener("keydown",i),e.appendChild(n),e.appendChild(t),document.body.appendChild(e),setTimeout(()=>{e.style.opacity="1"},10)})})});</script> <script type="module" src="/_astro/BlogPost.astro_astro_type_script_index_2_lang.CT6CDXPs.js"></script> <main data-astro-cid-bvzihdzo> <article data-astro-cid-bvzihdzo> <div class="hero-image" data-astro-cid-bvzihdzo>  </div> <div class="prose" data-astro-cid-bvzihdzo> <div class="title" data-astro-cid-bvzihdzo> <h1 data-astro-cid-bvzihdzo>用 AI 做幻灯片：frontend-slides Skill 使用体验</h1> <div class="date" data-astro-cid-bvzihdzo> 2026-04-17  </div> <hr data-astro-cid-bvzihdzo> </div>  <p>第一次知道 <a href="https://x.com/zarazhangrui">@zarazhangrui</a> 是因为她在 X 上的一篇热帖：</p>
+<blockquote>
+<p><a href="https://x.com/zarazhangrui/status/2004554163125141699">To learn anything, first unlearn school</a></p>
+</blockquote>
+<p>那篇文章的核心思想是”在干中学”（Learning by doing），类似于费曼学习法，通过输出倒逼输入。她本人也很好地践行了这种理念，一直坚持 Learning in Public，在 X 上分享了很多心得，非常值得学习。</p>
+<!-- more -->
+<h2 id="非程序员做出了让工程师点赞的开源项目">非程序员做出了让工程师点赞的开源项目</h2>
+<p>最近她发布了一个非常火的开源 Skill <a href="https://github.com/zarazhangrui/frontend-slides">frontend-slides</a>，在 GitHub 上获得了非常多的 Star。她本人并不是专业的程序员，但通过 AI 辅助编程（Vibe Coding）做出了一个让大家点赞无数的项目。这在以前是不可思议的——一个非工程师能在 GitHub 上做出让这么多专业工程师点赞的项目，但如今在 AI 时代，Nothing is impossible。</p>
+<h2 id="我为什么需要做幻灯片">我为什么需要做幻灯片</h2>
+<p>最近因为要准备一些汇报材料，不得不做一份幻灯片初稿。我个人非常讨厌做 PPT，但在某些汇报场景下又不得不做。去年我尝试过不少工具：</p>
+<ol>
+<li>最早像 GPT 或 Claude 的 Artifacts 都可以做单页幻灯片；</li>
+<li>后来国内的 Kimi、豆包以及 WPS 也都往这个方向发力；</li>
+<li>比较惊艳、产品完成度很高的是 Manus，端到端交付做得非常不错，我曾用它做过幻灯片，整个交付过程和设计的顺畅度都很好，但在免费会员下有一些额度限制；</li>
+<li>此外还有 Google 的 NotebookLM，也可以做出很好看的 PPT。</li>
+</ol>
+<p>Google NotebookLM 和 Manus 都是不错的产品，但对于这种低频场景，为此付费有时候会觉得划不来。</p>
+<h2 id="快速尝试完成了-90">快速尝试，完成了 90%</h2>
+<p>正好在 X 上刷到了 @zarazhangrui 的 frontend-slides Skill，就尝试用了一下。这次场景比较简单轻量，快速做了一个幻灯片，总体感觉非常不错——本来很焦虑的事情，一下子就完成了 90%。</p>
+<h2 id="skill-的工作流程">Skill 的工作流程</h2>
+<p>这个 Skill 可以通过 Claude Code 快速安装。我对它做了一个拆解，整体分为六个阶段：</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="mermaid"><code><span class="line"><span style="color:#E1E4E8">flowchart LR</span></span>
+<span class="line"><span style="color:#E1E4E8">    A[Phase 0\n检测模式] --> B[Phase 1\n内容收集]</span></span>
+<span class="line"><span style="color:#E1E4E8">    B --> C[Phase 2\n风格选择]</span></span>
+<span class="line"><span style="color:#E1E4E8">    C --> D[Phase 3\n生成幻灯片]</span></span>
+<span class="line"><span style="color:#E1E4E8">    D --> E[Phase 5\n交付预览]</span></span>
+<span class="line"><span style="color:#E1E4E8">    E --> F{分享或导出？}</span></span>
+<span class="line"><span style="color:#E1E4E8">    F --> G[Phase 6A\n部署到 Vercel]</span></span>
+<span class="line"><span style="color:#E1E4E8">    F --> H[Phase 6B\n导出 PDF]</span></span>
+<span class="line"><span style="color:#E1E4E8">    F --> I[Phase 6C\n导出 PPT]</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#E1E4E8">    classDef phase0 fill:#6366f1,stroke:#4338ca,color:#fff</span></span>
+<span class="line"><span style="color:#E1E4E8">    classDef phase1 fill:#0ea5e9,stroke:#0284c7,color:#fff</span></span>
+<span class="line"><span style="color:#E1E4E8">    classDef phase2 fill:#10b981,stroke:#059669,color:#fff</span></span>
+<span class="line"><span style="color:#E1E4E8">    classDef phase3 fill:#f59e0b,stroke:#d97706,color:#fff</span></span>
+<span class="line"><span style="color:#E1E4E8">    classDef phase5 fill:#f97316,stroke:#ea580c,color:#fff</span></span>
+<span class="line"><span style="color:#E1E4E8">    classDef decision fill:#e879f9,stroke:#c026d3,color:#fff</span></span>
+<span class="line"><span style="color:#E1E4E8">    classDef export fill:#64748b,stroke:#475569,color:#fff</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#E1E4E8">    class A phase0</span></span>
+<span class="line"><span style="color:#E1E4E8">    class B phase1</span></span>
+<span class="line"><span style="color:#E1E4E8">    class C phase2</span></span>
+<span class="line"><span style="color:#E1E4E8">    class D phase3</span></span>
+<span class="line"><span style="color:#E1E4E8">    class E phase5</span></span>
+<span class="line"><span style="color:#E1E4E8">    class F decision</span></span>
+<span class="line"><span style="color:#E1E4E8">    class G,H,I export</span></span></code></pre>
+<p>各阶段简要说明：</p>
+<ul>
+<li><strong>Phase 0 检测模式</strong>：判断是新建幻灯片、转换已有 PPT 文件，还是优化现有 HTML；</li>
+<li><strong>Phase 1 内容收集</strong>：利用 Claude Code 的 <code>AskUserQuestion</code> 工具，一次性问清楚用途、页数、内容是否准备好、是否需要浏览器内编辑，避免来回打断；</li>
+<li><strong>Phase 2 风格选择</strong>：不让你描述风格，而是直接生成 3 个真实单页预览让你挑选，所见即所得；</li>
+<li><strong>Phase 3 生成幻灯片</strong>：输出单文件 HTML，所有 CSS/JS 内联，零依赖，每张幻灯片严格适配视口不滚动；</li>
+<li><strong>Phase 5 交付预览</strong>：自动在浏览器中打开，告知快捷键操作方式；</li>
+<li><strong>Phase 6 分享导出</strong>：支持部署到 Vercel 生成可分享链接、导出 PDF 或导出 PPT 三种方式。</li>
+</ul>
+<p>交付产物是一个单文件 HTML，实现了幻灯片的轮播效果。最让我惊喜的功能：</p>
+<ul>
+<li><strong>交互式完善</strong>：继续跟 Claude Code 对话，就能把内容完善成图文并茂的幻灯片；</li>
+<li><strong>浏览器直接编辑</strong>：支持在浏览器中直接修改文字并保存到 HTML；</li>
+<li><strong>多格式导出</strong>：最后可以导出为 PDF 或 PPT 格式。</li>
+</ul>
+<h2 id="导出功能有些小坑">导出功能有些小坑</h2>
+<p>用下来，导出成 PPT 和 PDF 并不是很好用：</p>
+<ul>
+<li><strong>PDF 导出</strong>：导出时会启动一个 Playwright，由于浏览器尺寸和 HTML 源码的问题，导致字体大小和尺寸与 HTML 预览时并不完全一致；</li>
+<li><strong>PPTX 文件</strong>：通过内置脚本生成导出，风格也不太一致。</li>
+</ul>
+<h2 id="推荐用法html--chrome-全屏">推荐用法：HTML + Chrome 全屏</h2>
+<p>我比较推荐在许多场景下，直接使用 HTML 单文件格式，用 Chrome 浏览器打开并开启全屏，利用方向键和空格等快捷键进行轮播切换，基本上就是一个幻灯片演示模式。大部分场景下，这种交互方式已经足够用了。</p>
+<h2 id="总结">总结</h2>
+<p>这个 Skill 非常推荐大家去尝试。在某些不得不做幻灯片来更好地呈现和表达的场合，它是一个能帮你快速节省时间的好工具。</p>
+<p>也可以借鉴它的思路去改造自己的 Skill。更希望大家能从中学习到一种产品思维——利用 AI 去 build 更多有利于自己的工具，来满足自己工作场景中的各种需求。</p>
+<h2 id="references">References</h2>
+<ul>
+<li><a href="https://x.com/zarazhangrui/status/2004554163125141699">To learn anything, first unlearn school</a></li>
+<li><a href="https://github.com/zarazhangrui/frontend-slides">frontend-slides - GitHub</a></li>
+</ul>  </div> </article> </main> <footer data-astro-cid-sz7xmlte>
+&copy; 2026 Stephen Ni. All rights reserved.
+</footer> </body></html>

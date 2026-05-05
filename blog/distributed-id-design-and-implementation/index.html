@@ -1,0 +1,155 @@
+<!DOCTYPE html><html lang="en" data-astro-cid-bvzihdzo> <head><!-- Global Metadata --><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" type="image/svg+xml" href="/favicon.svg"><link rel="icon" href="/favicon.ico"><link rel="sitemap" href="/sitemap-index.xml"><link rel="alternate" type="application/rss+xml" title="Stephen Ni's Blog" href="https://nisiyong.com/rss.xml"><meta name="generator" content="Astro v6.1.1"><!-- Font preloads --><link rel="preload" href="/fonts/atkinson-regular.woff" as="font" type="font/woff" crossorigin><link rel="preload" href="/fonts/atkinson-bold.woff" as="font" type="font/woff" crossorigin><!-- Canonical URL --><link rel="canonical" href="https://nisiyong.com/blog/distributed-id-design-and-implementation/"><!-- Primary Meta Tags --><title>分布式唯一ID的方案与实现</title><meta name="title" content="分布式唯一ID的方案与实现"><meta name="description" content="分布式唯一ID的方案与实现，重点介绍 Snowflake 算法及其实践"><!-- Open Graph / Facebook --><meta property="og:type" content="website"><meta property="og:url" content="https://nisiyong.com/blog/distributed-id-design-and-implementation/"><meta property="og:title" content="分布式唯一ID的方案与实现"><meta property="og:description" content="分布式唯一ID的方案与实现，重点介绍 Snowflake 算法及其实践"><meta property="og:image" content="https://nisiyong.com/_astro/blog-placeholder-1.Bx0Zcyzv.jpg"><!-- Twitter --><meta property="twitter:card" content="summary_large_image"><meta property="twitter:url" content="https://nisiyong.com/blog/distributed-id-design-and-implementation/"><meta property="twitter:title" content="分布式唯一ID的方案与实现"><meta property="twitter:description" content="分布式唯一ID的方案与实现，重点介绍 Snowflake 算法及其实践"><meta property="twitter:image" content="https://nisiyong.com/_astro/blog-placeholder-1.Bx0Zcyzv.jpg"><style>:root{--accent: #3b82f6;--accent-dark: #2563eb;--black: 15, 18, 25;--gray: 96, 115, 159;--gray-light: 229, 233, 240;--gray-dark: 34, 41, 57;--gray-gradient: rgba(var(--gray-light), 50%), #fff;--box-shadow: 0 2px 6px rgba(var(--gray), 25%), 0 8px 24px rgba(var(--gray), 33%), 0 16px 32px rgba(var(--gray), 33%)}@font-face{font-family:Atkinson;src:url(/fonts/atkinson-regular.woff) format("woff");font-weight:400;font-style:normal;font-display:swap}@font-face{font-family:Atkinson;src:url(/fonts/atkinson-bold.woff) format("woff");font-weight:700;font-style:normal;font-display:swap}body{font-family:Atkinson,sans-serif;margin:0;padding:0;text-align:left;background:linear-gradient(var(--gray-gradient)) no-repeat;background-size:100% 600px;word-wrap:break-word;overflow-wrap:break-word;color:rgb(var(--gray-dark));font-size:17px;line-height:1.7}main{width:720px;max-width:calc(100% - 2em);margin:auto;padding:3em 1em}h1,h2,h3,h4,h5,h6{margin:0 0 .75rem;color:rgb(var(--black));line-height:1.3}h1{font-size:1.75em}h2{font-size:1.5em}h3{font-size:1.25em}h4{font-size:1.1em}h5{font-size:1em}strong,b{font-weight:700}a,a:hover{color:var(--accent)}p{margin-bottom:1em}.prose p{margin-bottom:1.25em}textarea{width:100%;font-size:16px}input{font-size:16px}table{width:100%}img{max-width:100%;height:auto;border-radius:8px}code{padding:2px 5px;background-color:rgb(var(--gray-light));border-radius:2px}pre{padding:1.5em;border-radius:8px;max-height:50vh;overflow:auto}pre>code{all:unset}blockquote{border-left:4px solid var(--accent);padding:0 0 0 20px;margin:0;font-size:1.333em}hr{border:none;border-top:1px solid rgb(var(--gray-light))}@media(max-width:720px){body{font-size:18px}main{padding:1em}}.sr-only{border:0;padding:0;margin:0;position:absolute!important;height:1px;width:1px;overflow:hidden;clip:rect(1px 1px 1px 1px);clip:rect(1px,1px,1px,1px);clip-path:inset(50%);white-space:nowrap}footer[data-astro-cid-sz7xmlte]{padding:2em 1em;background:linear-gradient(var(--gray-gradient)) no-repeat;color:rgb(var(--gray));text-align:center}a[data-astro-cid-eimmu3lg]{display:inline-block;text-decoration:none}a[data-astro-cid-eimmu3lg].active{font-weight:bolder;text-decoration:underline}header[data-astro-cid-3ef6ksr2]{margin:0;padding:0 1em;background:#fff;box-shadow:0 2px 8px rgba(var(--black),5%)}h2[data-astro-cid-3ef6ksr2]{margin:0;font-size:1em}h2[data-astro-cid-3ef6ksr2] a[data-astro-cid-3ef6ksr2],h2[data-astro-cid-3ef6ksr2] a[data-astro-cid-3ef6ksr2].active{text-decoration:none}nav[data-astro-cid-3ef6ksr2]{display:flex;align-items:center;justify-content:space-between}nav[data-astro-cid-3ef6ksr2] a[data-astro-cid-3ef6ksr2]{padding:1em .5em;color:var(--black);border-bottom:4px solid transparent;text-decoration:none}nav[data-astro-cid-3ef6ksr2] a[data-astro-cid-3ef6ksr2].active{text-decoration:none;border-bottom-color:var(--accent)}
+main[data-astro-cid-bvzihdzo]{width:calc(100% - 2em);max-width:100%;margin:0}.hero-image[data-astro-cid-bvzihdzo]{width:100%}.hero-image[data-astro-cid-bvzihdzo] img[data-astro-cid-bvzihdzo]{display:block;margin:0 auto;border-radius:12px;box-shadow:var(--box-shadow)}.prose[data-astro-cid-bvzihdzo]{width:680px;max-width:calc(100% - 2em);margin:auto;padding:.5em 1em 3em;color:rgb(var(--gray-dark))}.prose[data-astro-cid-bvzihdzo] p{margin-bottom:1.25em;line-height:1.7}.prose[data-astro-cid-bvzihdzo] h2{margin-top:1.25em;margin-bottom:.5em}.prose[data-astro-cid-bvzihdzo] h3{margin-top:1em;margin-bottom:.4em}.title[data-astro-cid-bvzihdzo]{margin-bottom:.75em;padding:0 0 .75em;text-align:center;line-height:1.3}.title[data-astro-cid-bvzihdzo] h1[data-astro-cid-bvzihdzo]{margin:0 0 .4em;font-size:1.75em}.date[data-astro-cid-bvzihdzo]{margin-bottom:.75em;color:rgb(var(--gray));font-family:SF Mono,Monaco,Inconsolata,Fira Code,monospace;font-size:.875rem}.last-updated-on[data-astro-cid-bvzihdzo]{font-style:italic}.code-block-wrapper{position:relative}.copy-button{position:absolute;top:.5rem;right:.5rem;padding:.25rem .75rem;background:rgb(var(--gray-light));border:1px solid rgb(var(--gray));border-radius:4px;font-size:.75rem;cursor:pointer;transition:all .2s ease;color:rgb(var(--gray-dark));opacity:0;pointer-events:none}.code-block-wrapper:hover .copy-button{opacity:1;pointer-events:auto}.copy-button:hover{background:rgb(var(--accent));color:#fff;border-color:rgb(var(--accent))}.copy-button.copied{background:#10b981;color:#fff;border-color:#10b981}
+</style></head> <body data-astro-cid-bvzihdzo> <header data-astro-cid-3ef6ksr2> <nav data-astro-cid-3ef6ksr2> <h2 data-astro-cid-3ef6ksr2><a href="/" data-astro-cid-3ef6ksr2>Stephen Ni&#39;s Blog</a></h2> <div class="internal-links" data-astro-cid-3ef6ksr2> <a href="/" data-astro-cid-3ef6ksr2="true" data-astro-cid-eimmu3lg> Home </a> <a href="/blog" class="active" data-astro-cid-3ef6ksr2="true" data-astro-cid-eimmu3lg> Blog </a> <a href="/about" data-astro-cid-3ef6ksr2="true" data-astro-cid-eimmu3lg> About </a> </div> </nav> </header> <script type="module">document.addEventListener("DOMContentLoaded",()=>{const n=()=>{document.querySelectorAll("pre").forEach(t=>{if(t.parentElement?.classList.contains("code-block-wrapper"))return;const o=document.createElement("div");o.className="code-block-wrapper";const e=document.createElement("button");e.className="copy-button",e.textContent="复制",e.setAttribute("aria-label","复制代码"),e.addEventListener("click",async()=>{const r=t.querySelector("code").textContent;try{await navigator.clipboard.writeText(r),e.textContent="已复制!",e.classList.add("copied"),setTimeout(()=>{e.textContent="复制",e.classList.remove("copied")},2e3)}catch{e.textContent="失败",setTimeout(()=>{e.textContent="复制"},2e3)}}),t.parentNode.insertBefore(o,t),o.appendChild(t),o.appendChild(e)})};n(),new MutationObserver(()=>{n()}).observe(document.body,{childList:!0,subtree:!0})});</script> <script type="module">document.addEventListener("DOMContentLoaded",()=>{document.querySelectorAll(".prose img").forEach(o=>{o.style.cursor="pointer",o.addEventListener("click",()=>{const e=document.createElement("div");e.className="lightbox-overlay",e.style.cssText=`
+				position: fixed;
+				top: 0;
+				left: 0;
+				width: 100%;
+				height: 100%;
+				background: rgba(0, 0, 0, 0.9);
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				z-index: 9999;
+				cursor: pointer;
+				opacity: 0;
+				transition: opacity 0.3s ease;
+			`;const n=document.createElement("img");n.src=o.src,n.style.cssText=`
+				max-width: 90%;
+				max-height: 90%;
+				object-fit: contain;
+				border-radius: 8px;
+				box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+			`;const t=document.createElement("button");t.innerHTML="×",t.className="lightbox-close",t.style.cssText=`
+				position: absolute;
+				top: 20px;
+				right: 30px;
+				background: rgba(255, 255, 255, 0.2);
+				border: none;
+				color: white;
+				font-size: 40px;
+				cursor: pointer;
+				padding: 10px 20px;
+				border-radius: 5px;
+				transition: background 0.3s ease;
+			`,t.addEventListener("mouseenter",()=>{t.style.background="rgba(255, 255, 255, 0.3)"}),t.addEventListener("mouseleave",()=>{t.style.background="rgba(255, 255, 255, 0.2)"});const s=()=>{e.style.opacity="0",setTimeout(()=>{document.body.removeChild(e)},300)};e.addEventListener("click",s),t.addEventListener("click",s);const i=r=>{r.key==="Escape"&&(s(),document.removeEventListener("keydown",i))};document.addEventListener("keydown",i),e.appendChild(n),e.appendChild(t),document.body.appendChild(e),setTimeout(()=>{e.style.opacity="1"},10)})})});</script> <script type="module" src="/_astro/BlogPost.astro_astro_type_script_index_2_lang.CT6CDXPs.js"></script> <main data-astro-cid-bvzihdzo> <article data-astro-cid-bvzihdzo> <div class="hero-image" data-astro-cid-bvzihdzo>  </div> <div class="prose" data-astro-cid-bvzihdzo> <div class="title" data-astro-cid-bvzihdzo> <h1 data-astro-cid-bvzihdzo>分布式唯一ID的方案与实现</h1> <div class="date" data-astro-cid-bvzihdzo> 2018-11-06  </div> <hr data-astro-cid-bvzihdzo> </div>  <p>在互联网架构演变的过程中，分布式唯一ID被广泛使用。常见的解决方法有UUID，基于数据库的方案等，本文重点来谈谈最最常用的一个方案——Snowflake算法。</p>
+<!-- more -->
+<h2 id="什么是snowflake算法">什么是Snowflake算法</h2>
+<p>Snowflake是一种可以大规模生成唯一ID的算法，它基于某些规则来保证。</p>
+<p>2011年Twitter公司在迁移MySQL数据到Cassandra时，需要一种新的方式来生成ID，因为Cassandra没有提供相应的唯一ID生成算法，所以诞生了Snowflake算法。</p>
+<p>Snowflake生成的ID是一个64bit的long类型，由以下3个部分组成：</p>
+<ul>
+<li>41位时间（存毫秒值，可以自定义起始时间，可使用69年）</li>
+<li>10机器码，最大允许1024台机器（实际使用0-255，共256台）</li>
+<li>12位序列号，每台机器每一毫秒最多可产生4096个序列号</li>
+</ul>
+<p><img alt="006tNbRwgy1fwr56686koj30d3024dfo" loading="lazy" decoding="async"  width="471" height="76" src="/_astro/006tNbRwgy1fwr56686koj30d3024dfo.Yj13la3l_Z6z1YX.webp" ></p>
+<p>除去第1位符号位，剩余63位可以保证1024台不同的机器每毫秒可产生4096不同的ID。换句话说，就是理论上每台机器每秒可产生409.6w个不同的ID，且最多可部署1024台机器。</p>
+<p><strong>强依赖系统时钟</strong></p>
+<p>Snowflake算法唯一不好的就是强依赖系统时钟，一旦系统时钟回拨了，那么就有可能产生重复的ID，这是不可以接受的，所以我们要想办法避免时钟回拨，或时钟回拨时要有告警，并停止生成ID。</p>
+<h2 id="部署架构">部署架构</h2>
+<p>在微服务架构的影响下，对分布式唯一ID的落地，我总结了两种部署架构，并讨论起利弊。</p>
+<h3 id="独立部署型">独立部署型</h3>
+<p><img alt="006tNbRwgy1fwypzo1r7lj30fl07j74i" loading="lazy" decoding="async"  width="561" height="271" src="/_astro/006tNbRwgy1fwypzo1r7lj30fl07j74i.BR5OslpU_Z2n3aqm.webp" ></p>
+<p>如上图，把id生成单独做成一个服务，对外提供接口调用，如订单服务order-service需要一个唯一ID时就发起一次调用，库存服务stock-service也是同样。由id-service内部保证唯一。</p>
+<p><strong>优点</strong></p>
+<ul>
+<li>id全局唯一。所有应用系统的id都不会重复</li>
+</ul>
+<p><strong>缺点</strong></p>
+<ul>
+<li>性能差，获取id时需要发起调用。就算做成批量获取，还是需要网络消耗</li>
+<li>强依赖，对id-service要求极高，一旦出问题，业务系统全部不可用</li>
+</ul>
+<h3 id="嵌入部署型">嵌入部署型</h3>
+<p><img alt="006tNbRwgy1fwypztmperj30d3029mx1" loading="lazy" decoding="async"  width="471" height="81" src="/_astro/006tNbRwgy1fwypztmperj30d3029mx1.Cnhgk3TF_Z1RreIt.webp" ></p>
+<p>如上图，嵌入部署的话，意思是把id-service的逻辑做成工具类，直接跟着应用系统的集群一起部署，每次获取id无需走网络调用，直接本地调用工具类生成即可。</p>
+<p><strong>优点</strong></p>
+<ul>
+<li>性能好，直接本地工具调用，内存直接获取</li>
+<li>弱依赖，应用之间互相独立，互不影响</li>
+</ul>
+<p><strong>缺点</strong></p>
+<ul>
+<li>id应用唯一。只能保证同个应用下id唯一，跨应用id有可能是相同的</li>
+</ul>
+<h2 id="实现方案">实现方案</h2>
+<p>具体实现主要关注两个问题：<code>机器ID自动下发</code>及<code>防止时钟回拨</code>。</p>
+<h3 id="机器id自动下发">机器ID自动下发</h3>
+<p>关于机器ID下发的具体实现，我们可以利用zookeeper的特性来实现。我们以应用为维度，每个应用都注册到<code>/snowflake</code>目录下，每个应用下有两个目录，<code>servers</code>目录以及<code>instances</code>目录。<code>servers</code>目录下的节点均为<code>持久化节点</code>，<code>instances</code>目录下的节点均为<code>临时节点</code>。</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="plaintext"><code><span class="line"><span>/snowflake</span></span>
+<span class="line"><span>	/app-name</span></span>
+<span class="line"><span>		/servers</span></span>
+<span class="line"><span>			/10.20.30.40:8888_0</span></span>
+<span class="line"><span>			/10.20.30.41:8888_1</span></span>
+<span class="line"><span>			/10.20.30.42:8888_2</span></span>
+<span class="line"><span>			...</span></span>
+<span class="line"><span>		/instances</span></span>
+<span class="line"><span>			/0</span></span>
+<span class="line"><span>			/1</span></span>
+<span class="line"><span>			/2</span></span>
+<span class="line"><span>			...</span></span>
+<span class="line"><span>			/255</span></span></code></pre>
+<p>下面流程展示了服务启动时获取机器ID的流程：</p>
+<p><img alt="006tNbRwgy1fwypzyc1o6j30b10jgjrl" loading="lazy" decoding="async"  width="397" height="700" src="/_astro/006tNbRwgy1fwypzyc1o6j30b10jgjrl.0qe-LXUE_Z10rISb.webp" ></p>
+<ol>
+<li>首先应用启动，得到自身应用相关信息，如应用名称，IP地址及端口等</li>
+<li>根据应用名称在对应的<code>servers</code>目录下，查找是否有匹配自身IP及端口的节点</li>
+<li>如果有跳到步骤4，没有则在<code>servers</code>下所有子节点中，从0～255中选出未被使用最小的机器ID</li>
+<li>获取到机器ID去<code>instances</code>目录下创建临时节点</li>
+<li>如果创建成功，则保存配置到<code>servers</code>中，并启动成功；如果创建失败，则判断重试次数，跳回步骤2或启动失败。</li>
+</ol>
+<blockquote>
+<p>为什么要这么做？用0～255的随机数去instances抢占也可以，为何还要保存配置到servers目录下？</p>
+<p>这么做的原因主要是尽可能地保证机器ID稳定，不变化。好处是可以缓存这个稳定的机器ID到本地磁盘文件，在zk不可用时，直接读取本地磁盘文件记录的机器ID启动，弱化了对zookeeper的依赖。</p>
+</blockquote>
+<h3 id="防止时钟回拨">防止时钟回拨</h3>
+<p>关于机器回拨的问题，可以分两种情况：<code>运行时回拨</code>和<code>启动时回拨</code>。</p>
+<p><strong>运行时回拨</strong></p>
+<p>这种情况可以在启动后每次生成id时在内存中用变量记录上一次的时间，一旦回拨可以及时发现，如回拨几毫秒可以选择等待，如过大范围回拨则抛异常，服务不可用。</p>
+<p><strong>启动时回拨</strong></p>
+<p>在进程启动时时钟已经发生回拨，这是用内存变量来记录上一次的时间以及没有多大作用了。这时本服务器的时钟已不可信，应该通过网络访问外部的时钟来判断。如开启NTP同步，基本可避免启动时已经发生回拨；美团的leaf-snowflake则是通过rpc的方式访问其他服务的系统时间做平均值来参考。只要启动时发现时钟回拨，则启动失败。</p>
+<h2 id="最佳实践">最佳实践</h2>
+<h3 id="多集群高可用">多集群高可用</h3>
+<p>预留机器码高2位作为集群表示位，即可以支持4个集群。</p>
+<p><img alt="image-20210727140118039" loading="lazy" decoding="async"  width="1476" height="670" src="/_astro/image-20210727140118039.DCesySg3_Fr83b.webp" ></p>
+<h3 id="奇偶均衡优化">奇偶均衡优化</h3>
+<p>由于在并发场景较低的场景下，同一毫秒下基本只生成一个ID，此时默认的序列号为0，这会导致雪花ID为偶数的概率非常大。</p>
+<p>为了使得ID的奇偶性均衡，我们在每次生成ID时，根据时间毫秒值除2取模作为序列号的起始位。</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="java"><code><span class="line"><span style="color:#F97583">if</span><span style="color:#E1E4E8"> (timestamp </span><span style="color:#F97583">==</span><span style="color:#E1E4E8"> lastTimestamp) {</span></span>
+<span class="line"><span style="color:#E1E4E8">  sequence </span><span style="color:#F97583">=</span><span style="color:#E1E4E8"> (sequence </span><span style="color:#F97583">+</span><span style="color:#79B8FF"> 1L</span><span style="color:#E1E4E8">) </span><span style="color:#F97583">&#x26;</span><span style="color:#E1E4E8"> sequenceMask;</span></span>
+<span class="line"><span style="color:#F97583">  if</span><span style="color:#E1E4E8"> (sequence </span><span style="color:#F97583">==</span><span style="color:#79B8FF"> 0</span><span style="color:#E1E4E8">) {</span></span>
+<span class="line"><span style="color:#E1E4E8">    timestamp </span><span style="color:#F97583">=</span><span style="color:#B392F0"> tilNextMillis</span><span style="color:#E1E4E8">(lastTimestamp);</span></span>
+<span class="line"><span style="color:#E1E4E8">  }</span></span>
+<span class="line"><span style="color:#E1E4E8">} </span><span style="color:#F97583">else</span><span style="color:#E1E4E8"> {</span></span>
+<span class="line"><span style="color:#6A737D">  // sequence begin with 0 or 1 in every millis</span></span>
+<span class="line"><span style="color:#E1E4E8">  sequence </span><span style="color:#F97583">=</span><span style="color:#E1E4E8"> lastTimestamp </span><span style="color:#F97583">&#x26;</span><span style="color:#79B8FF"> 1L</span><span style="color:#E1E4E8">;</span></span>
+<span class="line"><span style="color:#E1E4E8">}</span></span></code></pre>
+<h3 id="防止时钟回拨的优化">防止时钟回拨的优化</h3>
+<p>上述时钟回拨的处理方式比较粗暴，对业务非常不友好，所以需要进一步做优化：</p>
+<ol>
+<li>每次生成ID是判断时钟是否回拨，如果回拨了毫秒值保持不变</li>
+<li>毫秒值不变会导致序列号自增，类似并发场景</li>
+<li>序列号位自增满后，毫秒数加1，同时重置序列号位</li>
+</ol>
+<p>目前启动时回拨在功能实现上有一定的复杂性和成本，暂无实现。需要依赖服务器的NTP同步，所以使用雪花算法的服务器建议都开启NTP同步并做好监控。</p>
+<h2 id="总结">总结</h2>
+<p>本文是在工作中重构原有类snowflake算法使用不当情况下，做了一些探究并做了新版的实现。参考了一些现有的开源项目，和一些文章。如Twitter最早的官方材料，百度的uid-generator，美团的Leaf文章，以及微信的seqsvr等。</p>
+<p>根据业务情况，采用了嵌入部署型的snowflake，借鉴了美团leaf-snowflake的一些实践，并用本文所介绍的zookeeper自动下发机器ID的方案实现了分布式唯一ID生成的功能。</p>
+<h2 id="相关链接">相关链接</h2>
+<ul>
+<li>
+<p><a href="https://tech.meituan.com/MT_Leaf.html">https://tech.meituan.com/MT_Leaf.html</a></p>
+</li>
+<li>
+<p><a href="https://github.com/twitter-archive/snowflake">https://github.com/twitter-archive/snowflake</a></p>
+</li>
+<li>
+<p><a href="https://github.com/baidu/uid-generator">https://github.com/baidu/uid-generator</a></p>
+</li>
+<li>
+<p><a href="https://github.com/nebula-im/seqsvr">https://github.com/nebula-im/seqsvr</a></p>
+</li>
+</ul>  </div> </article> </main> <footer data-astro-cid-sz7xmlte>
+&copy; 2026 Stephen Ni. All rights reserved.
+</footer> </body></html>
